@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#:===============================================================================
+#:==============================================================================
 #:
 #:          FILE:  reg_bold
 #:
@@ -17,7 +17,7 @@
 #:       VERSION:  1.0
 #:       CREATED:  05/25/2007 10:31:01 PM MDT
 #:      REVISION:  ---
-#:===============================================================================
+#:==============================================================================
 
 # make sure there are 2 arguements
 if [ $# -ne 2 ]; then
@@ -57,18 +57,14 @@ fslsplit $BOLD_FILE $SPLIT_dir/vol
 
 #register and BET
 for f in $SPLIT_dir/vol*; do
-  echo $f
-  F_path=`basename $f`
-  F_name="${F_path%.*}"
-  F_ext="${F_path##*.}"
+  #echo $f
 
-  flirt -in $F_path -ref $STRUCT_FILE -out $F_name'_reg.'$F_ext
+  F_name=`basename $f`
+  F_ext="${F_name##*.}"
+  echo 'Running flirt on '$F_name
+  flirt -in $f -ref $STRUCT_FILE -out $F_name'_reg'
+  echo 'Output is ' $F_name'_reg'
 
-
-  # ask user to check if good enough
-  # if is, continue, else redo BET w/ -f 0.35
-
-  #fsleyes $BET_dir$F_bet'_brain.'$E_bet
 done
 
 
