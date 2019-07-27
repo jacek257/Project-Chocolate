@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#:===============================================================================
+#:==============================================================================
 #:
 #:          FILE:  reg_bold
 #:
@@ -12,12 +12,12 @@
 #:  REQUIREMENTS:  BOLD_scan -
 #:          BUGS:  ---
 #:         NOTES:  ---
-#:        AUTHOR:  Joe Brockmeier, jzb@zonker.net
-#:       COMPANY:  Dissociated Press
+#:        AUTHOR:  Supanjubobu Sqauru-Pantso, Patriku Star
+#:       COMPANY:  HMRI
 #:       VERSION:  1.0
 #:       CREATED:  05/25/2007 10:31:01 PM MDT
 #:      REVISION:  ---
-#:===============================================================================
+#:==============================================================================
 
 # make sure there are 2 arguements
 if [ $# -ne 2 ]; then
@@ -47,30 +47,45 @@ fi
 if [ ! -e $BOLD_dir/split/reg ]; then
   mkdir $BOLD_dir/split/reg
 fi
+if [ ! -e $BOLD_dir/mcflirt ]; then
+  mkdir $BOLD_dir/mcflirt
+fi
 
+
+
+MOTION_dir=$BOLD_dir/mcflirt
+SLICE_dir=$BOLD_dir/mcflirt/sliceCorrected
 SPLIT_dir="$BOLD_dir/split"
 BET_dir="$BOLD_dir/split/brain"
 REG_dir="$BOLD_dir/split/reg"
+
+
+#motion correction
+MOTION_name=${BOLD%%.*}'_mcf.'${BOLD##*.}
+mcflirt -in $BOLD_FILE -out $MOTION_dir/$MOTION_name
+echo 'motion corrected file named: '$MOTION_name
+echo 'at: '$MOTION_dir
 
 # call fslsplit to split 4D data into a cluster of 3Ds on time
 fslsplit $BOLD_FILE $SPLIT_dir/vol
 
 #register and BET
 for f in $SPLIT_dir/vol*; do
-  echo $f
-  F_path=`basename $f`
-  F_name="${F_path%.*}"
-  F_ext="${F_path##*.}"
+  #echo $f
 
-  flirt -in $F_path -ref $STRUCT_FILE -out $F_name'_reg.'$F_ext
+  F_name=`basename $f`
+  F_ext="${F_name##*.}"
+  echo 'Running flirt on '$F_name
+  flirt -in $f -ref $STRUCT_FILE -out $REG_dir/$F_name'_reg'
+  echo 'Output is ' $REG_dir/$F_name'_reg'
 
-
-  # ask user to check if good enough
-  # if is, continue, else redo BET w/ -f 0.35
-
-  #fsleyes $BET_dir$F_bet'_brain.'$E_bet
 done
 
+# for f in $REG_dir; do
+#   FB_
+#
+#
+# done
 
 
 # merge the registration files back in the BOLD directory
