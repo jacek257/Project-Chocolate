@@ -1,0 +1,21 @@
+
+/bin/cp /tmp/feat_HPCJIY.fsf design.fsf
+
+/usr/local/fsl/bin/feat_model design
+
+mkdir .files;cp /usr/local/fsl/doc/fsl.css .files;cp -r /usr/local/fsl/doc/images .files/images
+
+/usr/local/fsl/bin/fsl_sub -T 10 -l logs -N feat0_init   /usr/local/fsl/bin/feat /home/asophonsri/repos/Project-Chocolate/Data.feat/design.fsf -D /home/asophonsri/repos/Project-Chocolate/Data.feat -I 1 -init
+4620
+
+/usr/local/fsl/bin/fsl_sub -T 62 -l logs -N feat2_pre -j 4620  /usr/local/fsl/bin/feat /home/asophonsri/repos/Project-Chocolate/Data.feat/design.fsf -D /home/asophonsri/repos/Project-Chocolate/Data.feat -I 1 -prestats
+4768
+
+/usr/local/fsl/bin/fsl_sub -T 2 -l logs -N feat3_film -j 4768  /usr/local/fsl/bin/feat /home/asophonsri/repos/Project-Chocolate/Data.feat/design.fsf -D /home/asophonsri/repos/Project-Chocolate/Data.feat -I 1 -stats
+6417
+
+/usr/local/fsl/bin/fsl_sub -T 119 -l logs -N feat4_post -j 6417  /usr/local/fsl/bin/feat /home/asophonsri/repos/Project-Chocolate/Data.feat/design.fsf -D /home/asophonsri/repos/Project-Chocolate/Data.feat -poststats 0 
+6681
+
+/usr/local/fsl/bin/fsl_sub -T 1 -l logs -N feat5_stop -j 4768,6417,6681  /usr/local/fsl/bin/feat /home/asophonsri/repos/Project-Chocolate/Data.feat/design.fsf -D /home/asophonsri/repos/Project-Chocolate/Data.feat -stop
+7485

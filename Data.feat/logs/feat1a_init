@@ -1,0 +1,9 @@
+</pre><hr>Initialisation<br><pre>
+
+/usr/local/fsl/bin/fslmaths /home/asophonsri/repos/Project-Chocolate/Data/CVR_TEST_2_BOLD_CO2+O2_20190717153239 prefiltered_func_data -odt float
+Total original volumes = 320
+Deleting 6 volume(s) - BE WARNED for future analysis!
+
+/usr/local/fsl/bin/fslroi prefiltered_func_data prefiltered_func_data 6 314
+
+/usr/local/fsl/bin/fslroi prefiltered_func_data example_func 157 1
