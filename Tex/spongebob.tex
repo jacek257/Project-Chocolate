@@ -1,0 +1,191 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage[a4paper, total={6in, 9in}]{geometry}
+\renewcommand{\qedsymbol}{$\blacksquare$}
+
+
+\title{Spongebob Squarepants}
+
+\author{asophonsri1 }
+\date{July 2019}
+
+\begin{document}
+
+\maketitle
+
+\section*{Aims}
+Focus on aspects of BOLD that is relevant to us
+\begin{enumerate}
+    \item Find the individual contributions of O$_2$ and CO$_2$ to bold
+    \item Introduce fourier transform as a method to clean physiological noise from bold
+    \item Explore the use of gradient descent
+\end{enumerate}
+
+\section*{7/19/2019}
+\subsection*{Logistic Regression}
+We introduce the idea of a continuous logistic function used to regress to logistically behaving phenomena. Some such phenomena include bacterial growth in an environment with limited carrying capacity, the advancement of computer technology, but more importantly, the response curves for End-Tidal gasses recorded during a CVR-FMRI test.
+
+The logistic curve:
+$$ \zeta = \frac{M}{1+p^{-\alpha t}} + \psi$$
+is uniquely characterized by asymptotic behaviour as t $\rightarrow \pm\, \infty$
+% show graph here
+\\[2\baselineskip]
+However, regressing to the logistic curve poses a problem; the logistic curve innately relies on 4 independent variables: p, $\alpha$, M, and $\psi$.
+Therefore, in order to optimize the regression process, we propose using gradient descent as an iterative logistic regressor. As a cost function, ordinary least squares will have to do:
+
+$$ \text{cost} = \Big(\sum_{t=0}^{N} \big[\text{model}(t) - \text{observed}(t)\big]^2/N\Big) $$
+
+\noindent
+The gradient of this cost returns a vector of 4 variables:
+
+$$ \vec{\delta} = \nabla(cost) =  \Big\langle \frac{\delta}{\delta p}\,\zeta,\frac{\delta}{\delta \alpha}\,\zeta,\frac{\delta}{\delta M}\,\zeta,\frac{\delta}{\delta \psi}\,\zeta \Big\rangle  $$
+
+\noindent
+where:
+
+\begin{align}
+ &\frac{\delta}{\delta p}\,\zeta   &=        &\frac{2}{N}\Big( \frac{M}{1+p^{-\alpha T}} + \psi - Y \Big)         \Big( \frac{M\alpha \, T\, p^{-\alpha T-1}}{(1+p^{-\alpha T})^2} \Big) \\[1em]
+ &\frac{\delta}{\delta \alpha}\,\zeta  &=   &\frac{2}{N}\Big( \frac{M}{1+p^{-\alpha T}} + \psi - Y \Big)         \Big( \frac{M \ln(p)\, T\, p^{-\alpha T}}{(1+p^{-\alpha T})^2} \Big) \\[1em]
+ &\frac{\delta}{\delta M}\,\zeta   &=        &\frac{2}{N}\Big( \frac{M}{1+p^{-\alpha T}} + \psi - Y \Big)         \Big( \frac{1}{1+p^{-\alpha T}} \Big) \\[1em]
+ &\frac{\delta}{\delta \psi}\,\zeta    &=     &\frac{2}{N}\Big( \frac{M}{1+p^{-\alpha T}} + \psi - Y \Big)
+\end{align}
+
+\noindent
+under the case that:
+\begin{align*}
+    &T = \sum_{t=0}^{N} t \\[1em]
+    &Y = \sum_{t=0}^{N} y(t)
+\end{align*}
+
+\noindent
+We can now use this cost gradient in regression.
+
+ $$\vec{\Omega}_{i+1} = \vec{\Omega}_i + \varepsilon \,\vec{\delta}$$
+ {\centering where $\varepsilon \, \epsilon \, \mathbb{R}$ is sufficiently small and $\vec{\Omega}$ are parameter tuples
+ }
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\section*{7/22/2019}
+\subsection*{Logistic Regression Corrected}
+The mistake from above is assuming that the exponential base is not euler's constant: $e$
+Additionally, we should consider fitting an initial $t_0$ as well. This should result in a slightly different gradient function, but should stay more or less the same
+
+Our corrected logistic regressor is:
+$$ \zeta = \frac{M}{1+e^{-\alpha(t-\phi)}}  + \psi$$
+
+It follows that the basis of the cost gradient operation is:
+    $$\Big\langle \frac{\delta}{\delta M}\,\zeta, \frac{\delta}{\delta \alpha}\,\zeta, \frac{\delta}{\delta \phi}\,\zeta, \frac{\delta}{\delta \psi}\,\zeta \Big\rangle $$
+
+And therefore, the gradient includes the terms:
+\newcommand{\gradConst}{\sum_{t=0}^{T} \,2 \Big(\frac{M}{1+e^{-\alpha(t-\phi)}} + \psi - y\Big)}
+\newcommand{\gradZ}{e^{-\alpha(t-\phi)}}
+
+\begin{align*}
+    \frac{\delta}{\delta M}&\zeta&=& \gradConst \frac{1}{1 + \gradZ} \\[.7em]
+    \frac{\delta}{\delta \alpha}\,&\zeta&=& \gradConst \frac{M}{(1+\gradZ)^2}\Big[(t-\phi)\gradZ \Big]  \\[.7em]
+    \frac{\delta}{\delta \phi}\,&\zeta&=&  \gradConst \frac{-\alpha M \gradZ}{(1+\gradZ)^2} \\[.7em]
+    \frac{\delta}{\delta \psi}\,&\zeta&=& \gradConst
+\end{align*}
+
+\subsection*{Fourier Transform}
+\subsubsection*{Uniform vs Non-uniform}
+Discrete fourier transforms are functions that map time-varying signal (generally periodic) to a histogram indicating the distribution of frequencies. Discrete Fourier transforms are found using:
+\begin{align*}
+    \hat{\chi} &= \sum_{n=0}^{N-1} \chi_n \cdot e^{-\frac{i2\pi}{N} kn}\\[.7em]
+    &= \sum_{n=0}^{N-1} \chi_n \cdot \Big[ cos\bigg(\frac{2\pi kn}{N}\bigg) - i\cdot sin\bigg(\frac{2\pi kn}{N}\bigg) \Big]
+\end{align*}
+
+In which we can abstract:
+\begin{align}
+    \frac{k}{N} &\rightarrow \text{frequencies}\\
+    n &\rightarrow \text{time}
+\end{align}
+
+However, it is not the case that signals are sampled periodically; luckily, we (someone else) has abstracted the idea of the discrete fourier transform to the following:
+
+\begin{align*}
+    \hat{\chi} &= \sum_{n=0}^{N-1} \chi_n \cdot e^{-2\pi i p_n \omega_k}\\[.7em]
+    &= \sum_{n=0}^{N-1} \chi_n \cdot \Big[ cos\big({2\pi p_n \omega_k}\big) - i\cdot sin\big({2\pi p_n \omega_k}\big) \Big]
+\end{align*}
+
+In which we have abstracted uniform frequency to a mapping of frequencies: $\omega_k$
+and a uniform timestep to a mapping of timesteps: $p_n$
+
+Both inverse transforms are defined by replacing: % $\hat{\chi}$ with $\chi_n$ as well as $-i$ with $i$
+$$\hat{\chi} \text{ with } \chi_n\text{ as well as }(-i)\text{ with }(i)$$
+\subsubsection*{Spectral Leakage}
+Spectral Leakage is the phenomena where the application of a time-variant function introduces new frequencies into the frequency distribution. In this case, the rectangular windowing of the transform introduces some frequency scalloping: the target frequency we want to extract is clouded by similar frequency. We want to explore different windowing functions to optimize frequency extraction. Notably, we are experimenting with Blackman and Hamming windows.
+
+Read Window Advantages (email Jimmy)
+
+\subsubsection*{Notes on sampling rate of GE scanner}
+\begin{itemize}
+    \item GE respiratory scan rate is 40 ms, we want minute-frequency so we divide .04 by 60
+    \item BOLD data is measured in fractions of minutes no division is necessary to convert to frequency domain
+    \item Pulse Ox measures every 1o ms and ECG measures every 1 ms
+\end{itemize}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section*{7/23/2019}
+\subsection*{Fourier Transform}
+To recap from yesterday, the inputs to the fourier transform are indeed uniform. The current problems faced are:
+\begin{enumerate}
+  \item Summation (subtraction) of the Power Spectra yields negative progress; the resultant power spectrum contains more noise
+  \item True (non-truncated) algebra on the Power Spectra is not currently possible due to different numpy array sizes
+\end{enumerate}
+
+In addition to the problems, we have observed several phenomena related to fourier transforms:
+\begin{enumerate}
+  \item The fourier transform is symmetric across the perpendicular bisector of the frequency domain.
+  \item Low pass filters perserve larger features.
+\end{enumerate}
+That being said, we have observed good preservation of feature with a low-pass filter filtering frequencies  $>$ $\approx$ .0583 hz
+We think the resulting noise is caused by Heart rhythm\\
+
+We suggest the following method:
+\begin{enumerate}
+  \item smooth the respiratory power spectrum using a mirrored-symmetric boundary condition IIR filter
+  \begin{itemize}
+    \item the resulting spectra should be approximately gaussian
+  \end{itemize}
+  \item calculate the range of acceptable confidence. We will define acceptability later.
+  \item zero the calculated range in the power spectra of the CO$_2$/O$_2$ signal
+  \begin{itemize}
+    \item remember that operations must be performed symmetrically
+  \end{itemize}
+\end{enumerate}
+
+It is possible that this method yields little benefit.
+
+\subsubsection*{Spectral Leakage}
+Non-rectangular windows distort uneventful data past usefulness. We should formulate an algorithm to choose whether or not to use a window, and we should experiment to see whether a window is necessary.
+\subsubsection*{Comparison with Feat}
+
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section*{TODO}
+\begin{enumerate}
+    \item consider piece-wise fitting: the entire series not of the same model
+    \item consider temporal derivative piece-wising
+    \item consider filtering breathing rhythm from data
+    \item draw graphs
+    \item insert data drawings: time series data as well as gradient descent data
+    \item test atom
+\end{enumerate}
+\end{document}
