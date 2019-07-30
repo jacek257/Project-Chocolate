@@ -1,5 +1,5 @@
 # Fdb version 3
-["pdflatex"] 1564035088 "Theory.tex" "Theory.pdf" "Theory" 1564035088
+["pdflatex"] 1564510493 "Theory.tex" "Theory.pdf" "Theory" 1564510495
   "/usr/local/texlive/2019/texmf-dist/fonts/map/fontname/texfonts.map" 1511824771 3332 103109f5612ad95229751940c61aada0 ""
   "/usr/local/texlive/2019/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmex7.tfm" 1246382020 1004 54797486969f23fa377b128694d548df ""
   "/usr/local/texlive/2019/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmex8.tfm" 1246382020 988 bdf658c3bfc2d96d3c8b02cfc1c94c20 ""
@@ -51,13 +51,13 @@
   "/usr/local/texlive/2019/texmf-dist/tex/latex/base/size10.clo" 1544567569 8294 6d6e23d5169c0d89d173f6c7e08a005a ""
   "/usr/local/texlive/2019/texmf-dist/tex/latex/geometry/geometry.sty" 1525727744 41645 0653033a985e06c69a2a9cea9a95e31a ""
   "/usr/local/texlive/2019/texmf-dist/tex/latex/graphics/keyval.sty" 1523134385 2591 6404d0c7d28505fb38ce0d86c2e28ae7 ""
-  "/usr/local/texlive/2019/texmf-dist/web2c/texmf.cnf" 1562796882 36005 b5215be59893aa23abcf55b744114feb ""
-  "/usr/local/texlive/2019/texmf-var/fonts/map/pdftex/updmap/pdftex.map" 1564031815 4625664 35be593d9f8423962b7f0fa1a899ead7 ""
-  "/usr/local/texlive/2019/texmf-var/web2c/pdftex/pdflatex.fmt" 1564031834 4264881 aca93ab727ea136929038c11f90b782a ""
-  "/usr/local/texlive/2019/texmf.cnf" 1564031811 455 5b996dcaa0eb4ef14a83b026bc0a008c ""
-  "Theory.aux" 1564035088 8 a94a2480d3289e625eea47cd1b285758 "pdflatex"
-  "Theory.tex" 1564035088 1182 c20844ab775dc1ceddbdae61f1cfc954 ""
+  "/usr/local/texlive/2019/texmf-dist/web2c/texmf.cnf" 1557092114 35484 cb1661360667bf4db662a8895053b554 ""
+  "/usr/local/texlive/2019/texmf-var/fonts/map/pdftex/updmap/pdftex.map" 1557342064 3277517 23507ed665b4dd9046f0f2a94bbef2be ""
+  "/usr/local/texlive/2019/texmf-var/web2c/pdftex/pdflatex.fmt" 1557342086 4259635 562fc36ec496993777a6c428d8bfb811 ""
+  "/usr/local/texlive/2019/texmf.cnf" 1557341546 577 d150fef99ac436ad1156e86b0892f6ef ""
+  "Theory.aux" 1564510494 8 a94a2480d3289e625eea47cd1b285758 "pdflatex"
+  "Theory.tex" 1564510493 2590 c84da651f18d28e644678ba348250de2 ""
   (generated)
+  "Theory.aux"
   "Theory.log"
   "Theory.pdf"
-  "Theory.aux"

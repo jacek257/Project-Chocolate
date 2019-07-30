@@ -7,7 +7,7 @@
 \renewcommand{\qedsymbol}{$\blacksquare$}
 \newcommand{\subtwo}{$_2$}
 
-\title{Spongebob Squarepants}
+\title{The Mitochodria is the Powerhouse of the Cell}
 
 \author{asophonsri1 }
 \date{July 2019}
@@ -17,25 +17,35 @@
 \maketitle
 
 \section*{Introduction}
-We proposed method introduces new physiological quanities aimed at increasing the CVR-BOLD regression strength. In fact, our sample size of 1 pushes us to conclude that we deserve yall's money. Please fund us :(
+  CVR testing is utilized to measure the reactivity of the cerebral vascular system to different stimuli, namely O2 and CO2. Using BOLD MRI, we are able to image the changing vascular volumes in the brain. The proposed method aims to identify the individual contributions of O2 and CO2 to BOLD signal as well as identify any extraneous physiological noise.
 
 \section*{Theory}
 \subsection*{Fourier Transform}
+  Fourier transforms and analysis are designed for processing periodic signals. That being said, O2 and CO2 data is highly affected by breathing rate. Analyzing O2 and CO2 data under fourier allows us to identify the distribution of respiratory rate.
 \subsection*{Logistic Growth and Decay}
-Under the basis that blood oxygenation is upper and lower limited, we belive that a O\subtwo follows a piecewise Logistic Growth and Decay model. That is, we can model saturation with:
+  Under the basis that blood oxygenation is upper and lower limited, we belive that a O2 follows a piecewise Logistic Growth and Decay model. That is, we can model saturation with:
 
-$$f(t)=
-\[ \begin{cases}
-      \frac{M_1}{1+e^{-\alpha_1(t-\phi_1)}}  + \psi_1 & t\leq \tau\\[.4em]
-      \frac{M_2}{1+e^{-\alpha_2(t-\phi_2)}}  + \psi_2 & t\geq \tau
-   \end{cases}
-\]$$
+\begin{equation}
+f(t)=\begin{cases}
+    \frac{M_1}{1+e^{-\alpha_1(t-\phi_1)}}  + \psi_1 & t\leq \tau\\[.4em]
+    \frac{M_2}{1+e^{-\alpha_2(t-\phi_2)}}  + \psi_2 & t\geq \tau
+ \end{cases}
+\end{equation}
+
+
 
 \subsection*{Gradient Descent}
-r
+Fitting the logistic model is a problem of 4 dimensions. Normal fitting procedures are too inefficient or inaccurate to use. Using gradient descent allows us to iteratively approach a perfect model. The premise of gradient descent is to optimize a cost function whose inputs are our variables of interest.\\
+
+Basic Calculs defines the gradient as the direction of greatest ascent. In order to optimize a model, we traverse in the direction opposite (negative) of the gradient. \\
+
+Let $\vec{\delta} = \nabla \,g(\vec{p})$ where $g(\vec{p})$ is the cost function and $\vec{p}$ is the parameter list. Therefore,  in order to reach minimum we perform the following operation over several iterations:
+$$\vec{p}_{n+1} = \vec{p}_n + \varepsilon\vec{\delta} $$ %$$&n\text{ the iteration}$$
 \subsection*{General Linear Model (FSL)}
+FSL provides a statistical model analysis which we can use to generate statistics on the strenght, the correlation, of our predicted model
 
 \section*{Methods and Algorithms}
+The raw data is pushed through the following algorithm
 \section*{Conclusion}
 
 \end{document}
