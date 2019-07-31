@@ -11,7 +11,6 @@ import numpy as np
 import scipy.signal as sg
 from scipy.fftpack import fft, ifft
 import os, sys
-import grad_descent as descender
 
 #get_ipython().run_line_magic('matplotlib', 'inline')
 #matplotlib.rcParams.update({'text.color': 'white'})
