@@ -41,8 +41,8 @@ def filter(f_low, f_high, freq_dom, power_spectra):
 
 def fourier_filter(time_series, data):
     freq, power, disp = fourier_trans(time_series, data)
-    filtered = filter(4,30, freq, power)
-    return ifft(sg.resample(filtered,320))
+    pre_invert = filter(3,30, freq, power)
+    return sg.resample(ifft(pre_invert),320)
 
 def showMe(*plots):
     plt.figure(figsize=(20,10))
