@@ -3,6 +3,8 @@
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{amsthm}
+\usepackage{graphicx}
+\graphicspath{{./images/}}
 \usepackage[a4paper, total={6in, 9in}]{geometry}
 \renewcommand{\qedsymbol}{$\blacksquare$}
 \newcommand{\subtwo}{$_2$}
@@ -21,7 +23,7 @@
 
 \section*{Theory}
 \subsection*{Fourier Transform}
-  Fourier transforms and analysis are designed for processing periodic signals. That being said, O2 and CO2 data is highly affected by breathing rate. Analyzing O2 and CO2 data under fourier allows us to identify the distribution of respiratory rate.
+  Fourier transforms and analysis are designed for processing periodic signals. That being said, O2 and CO2 data is highly affected by breathing rate. Analyzing O2 and CO2 data under fourier allows us to identify the frequency distribution of respiratory rate. These frequencies are zeroed and the resulting power spectra is inverted back into cleaned gas signal.
 \subsection*{Logistic Growth and Decay}
   Under the basis that blood oxygenation is upper and lower limited, we belive that a O2 follows a piecewise Logistic Growth and Decay model. That is, we can model saturation with:
 
@@ -45,7 +47,25 @@ $$\vec{p}_{n+1} = \vec{p}_n + \varepsilon\vec{\delta} $$ %$$&n\text{ the iterati
 FSL provides a statistical model analysis which we can use to generate statistics on the strenght, the correlation, of our predicted model
 
 \section*{Methods and Algorithms}
-The raw data is pushed through the following algorithm
+The raw data is pushed through the following algorithm:
+\begin{enumerate}
+  \item We begin by recording CO\subtwo\,  and O\subtwo\,  data:
+    \begin{figure}[h!]
+      \includegraphics[width=\linewidth]{raw_data.png}
+      \caption{O\subtwo, CO\subtwo data}
+      \label{fig:rawData}
+    \end{figure}
+    We can see from the figure that both time-series vary dramatically in a small interval. This variation, is due to 
+  \item Signal is cleaned of respiratory influence, resulting in an averaged gas concenctration.
+  \item Cleaned signal is split, determining the two pieces to our piecewise model.
+  \item Each split is regressed to a logistic curve through gradient descent. The logistic curves fully define our model
+  \item The model accurately downsamples the data.
+  \item FSL consideres the downsampled data and generates statistics
+\end{enumerate}
+
+\section*{Data}
+
+
 \section*{Conclusion}
 
 \end{document}

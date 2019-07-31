@@ -1,5 +1,6 @@
 from math import e
 import numpy as np
+import scipy.signal as sg
 
 class gd:
     def __grad_constant(M, alpha, phi, psi, t, y):
@@ -81,11 +82,13 @@ class gd:
                 minima_reached = True
                 minima = (prev_M, prev_alpha, prev_phi, prev_psi)
 
-
         return minima
 
-def generate_logistic_curve(constant_tuple, time):
-    out_y = []
-    for i, data in enumerate(time):
-        out_y.append(constant_tuple[0]/(1+e**(-1*constant_tuple[1]*(data - constant_tuple[2])))+constant_tuple[3])
-    return out_y
+    def generate_logistic_curve(constant_tuple, time):
+        out_y = []
+        for i, data in enumerate(time):
+            out_y.append(constant_tuple[0]/(1+e**(-1*constant_tuple[1]*(data - constant_tuple[2])))+constant_tuple[3])
+        return out_y
+
+    def piece_splitter(sequence):
+        return np.argmin(sg.symiirorder1(np.gradient(np.gradient(sequence))[100:-100], 10,.99))
