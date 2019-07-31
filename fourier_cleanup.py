@@ -9,6 +9,8 @@ from scipy import signal as sg
 import argparse
 import seaborn as sns
 import matplotlib.pyplot as plt
+import analysis
+
 
 # instantiate the argument parser
 parser = argparse.ArgumentParser()
@@ -63,9 +65,9 @@ for file in txt_files:
     if not os.path.exists(f_path[:-4]):
         os.mkdir(f_path[:-4])
 
-                # fourier transform and filter //TODO
-                low_O2, _ = sg.find_peaks(df.O2.apply(lambda x:x*-1), prominence=2)
-                # invert transform //TODO
+
+    # fourier transform and filter and invert O2
+    low_O2 = analysis.fourier_filter(df.Time[1], df.O2)
 
     # create scatterplot of all O2 data
     if verb:
@@ -84,9 +86,9 @@ for file in txt_files:
         plt.show()
     plt.close()
 
-                # fourier transform and filter //TODO
-                high_CO2, _ = sg.find_peaks(df.CO2, prominence=2)
-                # invert transform //TODO
+    # fourier transform and filter and invert CO2
+    high_CO2 = analysis.fourier_filter(df.Time[1], df.CO2)
+
 
     # create scatter of all CO2 data
     if verb:
