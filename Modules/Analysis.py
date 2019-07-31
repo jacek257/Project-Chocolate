@@ -128,7 +128,7 @@ downC = sg.resample(invertedC, 320)
 
 # showMe(downO, downC)
 
-processed_data_path = './contrasts/'
+processed_data_path = sys.arg[3]+'contrasts/'
 if(not os.path.exists(processed_data_path)):
     os.mkdir(processed_data_path)
     print ('path created')
