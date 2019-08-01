@@ -67,7 +67,8 @@ for file in txt_files:
 
 
     # fourier transform and filter and invert O2
-    low_O2 = analysis.fourier_filter(df.Time[1], df.O2)
+    low_O2 = analysis.fourier_filter(df.Time[1], df.O2,3,25)
+    fft_O2 = pd.DataFrame({'Time': np.linspace(0, df.Time[-1],320),'Resample' : Low_O2)
 
     # create scatterplot of all O2 data
     if verb:
@@ -75,7 +76,7 @@ for file in txt_files:
     sns.lineplot(x='Time', y='O2', data=df, linewidth=1, color='b')
 
     # add peak overlay onto the scatterplot
-    sns.lineplot(x='Time', y='O2', data=df.iloc[low_O2], linewidth=4, color='g')
+    sns.lineplot(x='Time', y='O2', data=fft_O2, linewidth=4, color='g')
 
     # save the plot
     if verb:
@@ -87,7 +88,8 @@ for file in txt_files:
     plt.close()
 
     # fourier transform and filter and invert CO2
-    high_CO2 = analysis.fourier_filter(df.Time[1], df.CO2)
+    high_CO2 = analysis.fourier_filter(df.Time[1], df.CO2,3,25)
+    fft_CO2 = pd.DataFrame({'Time': np.linspace(0, df.Time[-1],320),'Resample' : high_CO2)
 
 
     # create scatter of all CO2 data
@@ -96,7 +98,7 @@ for file in txt_files:
     sns.lineplot(x='Time', y='CO2', data=df, linewidth=1, color='b')
 
     # add peak overlay onto the scatterplot
-    sns.lineplot(x='Time', y='CO2', data=df.iloc[high_CO2], linewidth=4, color='r')
+    sns.lineplot(x='Time', y='CO2', data=fft_CO2, linewidth=4, color='r')
 
     # save the plot
     if verb:

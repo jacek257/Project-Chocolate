@@ -39,9 +39,9 @@ def filter(f_low, f_high, freq_dom, power_spectra):
             cp[-i] = (f_high-f)*(.1/f_high)
     return np.copy(cp)
 
-def fourier_filter(time_series, data):
+def fourier_filter(time_series, data, low_f, high_f):
     freq, power, disp = fourier_trans(time_series, data)
-    pre_invert = filter(3,30, freq, power)
+    pre_invert = filter(low_f,high_f, freq, power)
     return sg.resample(ifft(pre_invert),320)
 
 def showMe(*plots):
