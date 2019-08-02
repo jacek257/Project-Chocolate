@@ -5,10 +5,13 @@ By: Jimi Cao, Austin Sophonsri
 
 import os
 import pandas as pd
+import numpy as np
 from scipy import signal as sg
 import argparse
 import seaborn as sns
 import matplotlib.pyplot as plt
+import analysis
+
 
 # instantiate the argument parser
 parser = argparse.ArgumentParser()
@@ -63,8 +66,10 @@ for file in txt_files:
     if not os.path.exists(f_path[:-4]):
         os.mkdir(f_path[:-4])
 
-    # get the troughs of the O2 data
-    low_O2, _ = sg.find_peaks(df.O2.apply(lambda x:x*-1), prominence=2)
+
+    # fourier transform and filter and invert O2
+    low_O2 = analysis.fourier_filter(df.Time[1], df.O2,3,25)
+    fft_O2 = pd.DataFrame({'Time': np.linspace(0, df.Time[len(df.Time)-1],320),'O2' : low_O2})
 
     # create scatterplot of all O2 data
     if verb:
@@ -72,7 +77,7 @@ for file in txt_files:
     sns.lineplot(x='Time', y='O2', data=df, linewidth=1, color='b')
 
     # add peak overlay onto the scatterplot
-    sns.lineplot(x='Time', y='O2', data=df.iloc[low_O2], linewidth=4, color='g')
+    sns.lineplot(x='Time', y='O2', data=fft_O2, linewidth=4, color='g')
 
     # save the plot
     if verb:
@@ -83,8 +88,10 @@ for file in txt_files:
         plt.show()
     plt.close()
 
-    # get peaks of the CO2 data
-    high_CO2, _ = sg.find_peaks(df.CO2, prominence=2)
+    # fourier transform and filter and invert CO2
+    high_CO2 = analysis.fourier_filter(df.Time[1], df.CO2,3,25)
+    fft_CO2 = pd.DataFrame({'Time': np.linspace(0, df.Time[len(df.Time)-1],320),'CO2' : high_CO2})
+
 
     # create scatter of all CO2 data
     if verb:
@@ -92,7 +99,7 @@ for file in txt_files:
     sns.lineplot(x='Time', y='CO2', data=df, linewidth=1, color='b')
 
     # add peak overlay onto the scatterplot
-    sns.lineplot(x='Time', y='CO2', data=df.iloc[high_CO2], linewidth=4, color='r')
+    sns.lineplot(x='Time', y='CO2', data=fft_CO2, linewidth=4, color='r')
 
     # save the plot
     if verb:
@@ -104,19 +111,21 @@ for file in txt_files:
     plt.close()
 
     # since the find_peaks only returns the index that the peak is found, we need to grab the actual data point
-    O2_df = df.iloc[low_O2].O2
-    CO2_df = df.iloc[high_CO2].CO2
+    # O2_df = df.iloc[low_O2].O2
+    # CO2_df = df.iloc[high_CO2].CO2
 
     # make the file name and save the O2 and CO2 data into their corresponding file
     if verb:
         print("Saving O2 data for ", file)
     save_path = path+file[:len(file)-4]+'/O2_contrast.txt'
-    O2_df.to_csv(path_or_buf=save_path, sep='\t', header=False, index=False)
+    # O2_df.to_csv(path_or_buf=save_path, sep='\t', header=False, index=False)
+    np.savetxt(save_path, low_O2, delimiter='\n')
 
     if verb:
         print('Saving CO2 data for ', file)
     save_path = path+file[:len(file)-4]+'/CO2_contrast.txt'
-    CO2_df.to_csv(path_or_buf=save_path, sep='\t', header=False, index=False)
-
+    #CO2_df.to_csv(path_or_buf=save_path, sep='\t', header=False, index=False)
+    np.savetxt(save_path, high_CO2, delimiter='\n')
+    
     if verb:
         print()
