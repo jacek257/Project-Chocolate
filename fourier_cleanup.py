@@ -111,19 +111,21 @@ for file in txt_files:
     plt.close()
 
     # since the find_peaks only returns the index that the peak is found, we need to grab the actual data point
-    O2_df = df.iloc[low_O2].O2
-    CO2_df = df.iloc[high_CO2].CO2
+    # O2_df = df.iloc[low_O2].O2
+    # CO2_df = df.iloc[high_CO2].CO2
 
     # make the file name and save the O2 and CO2 data into their corresponding file
     if verb:
         print("Saving O2 data for ", file)
     save_path = path+file[:len(file)-4]+'/O2_contrast.txt'
-    O2_df.to_csv(path_or_buf=save_path, sep='\t', header=False, index=False)
+    # O2_df.to_csv(path_or_buf=save_path, sep='\t', header=False, index=False)
+    np.savetxt(save_path, low_O2, delimiter='\n')
 
     if verb:
         print('Saving CO2 data for ', file)
     save_path = path+file[:len(file)-4]+'/CO2_contrast.txt'
-    CO2_df.to_csv(path_or_buf=save_path, sep='\t', header=False, index=False)
-
+    #CO2_df.to_csv(path_or_buf=save_path, sep='\t', header=False, index=False)
+    np.savetxt(save_path, high_CO2, delimiter='\n')
+    
     if verb:
         print()
