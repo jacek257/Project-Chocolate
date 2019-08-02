@@ -51,7 +51,7 @@ for file in txt_files:
         os.mkdir(f_path[:-4])
     else:
         continue
-    
+
     # read in the data from the text files, but only keep the Time, O2, and CO2 data
     df = pd.read_csv(f_path, sep='\t|,', names=['Time', 'O2', 'CO2', 'thrw', 'away'], usecols=['Time', 'O2', 'CO2'], index_col=False, engine='python')
 
@@ -60,14 +60,13 @@ for file in txt_files:
     if df.empty or df.CO2.max() < 1:
         print(file, "dropped. Bad data")
         continue
-    
+
     # make a loop for user confirmation that O2 peak detection is good
     bad = True
     prom = 1
-    wid = 1
     while bad:
         # get the troughs of the O2 data
-        low_O2, _ = sg.find_peaks(df.O2.apply(lambda x:x*-1), prominence=prom, width=wid)
+        low_O2, _ = sg.find_peaks(df.O2.apply(lambda x:x*-1), prominence=prom)
 #        O2_interp = interpolate(df.iloc[low_O2].Time, df.iloc[low_O2].O2, fill_value='extrapolate')
 
         # create scatterplot of all O2 data
@@ -79,7 +78,7 @@ for file in txt_files:
         sns.lineplot(x='Time', y='O2', data=df.iloc[low_O2], linewidth=2, color='g')
         plt.show()
         plt.close()
-        
+
         # ask user if the peak finding was good
         ans = input("Was the output good enough (y/n)? \nNote: anything not starting with 'y' is considered 'n'.\n")
         bad = True if ans == '' or ans[0].lower() != 'y' else False
@@ -92,32 +91,26 @@ for file in txt_files:
             except:
                 print("Default value used")
                 prom = 1
-            try:
-                prom = int(input("New width (Default is 1): "))
-            except:
-                print("Default value used")
-                wid = 1
-    
+
 
     # make another loop for user confirmation that CO2 peak detection is good
     bad = True
     prom = 1
-    wid = 1
     while bad:
         # get peaks of the CO2 data
-        high_CO2, _ = sg.find_peaks(df.CO2, prominence=prom, width=wid)
+        high_CO2, _ = sg.find_peaks(df.CO2, prominence=prom)
 #        CO2_interp = interpolate(df.iloc[low_CO2].Time, df.iloc[high_CO2].CO2, fill_value='extrapolate')
-    
+
         # create scatter of all CO2 data
         if verb:
             print('Creating CO2 plot ', file)
         sns.lineplot(x='Time', y='CO2', data=df, linewidth=1, color='b')
-    
+
         # add peak overlay onto the scatterplot
         sns.lineplot(x='Time', y='CO2', data=df.iloc[high_CO2], linewidth=2, color='r')
         plt.show()
         plt.close()
-        
+
         # ask user if the peak finding was good
         ans = input("Was the output good enough (y/n)? \nNote: anything not starting with 'y' is considered 'n'.\n")
         bad = True if ans == '' or ans[0].lower() != 'y' else False
@@ -130,17 +123,12 @@ for file in txt_files:
             except:
                 print("Default value used")
                 prom = 1
-            try:
-                prom = int(input("New width (Default is 1): "))
-            except:
-                print("Default value used")
-                wid = 1
-        
+
     plt.close()
 
     # create subplots for png file later
-    f, axes = plt.subplots(2, 1)            
-    
+    f, axes = plt.subplots(2, 1)
+
     # recreate the plot because plt.show clears plt
     sns.lineplot(x='Time', y='O2', data=df, linewidth=1, color='b', ax=axes[0])
     sns.lineplot(x='Time', y='O2', data=df.iloc[low_O2], linewidth=2, color='g', ax=axes[0])
@@ -151,7 +139,7 @@ for file in txt_files:
     # recreate the plot because plt.show clears plt
     sns.lineplot(x='Time', y='CO2', data=df, linewidth=1, color='b', ax=axes[1])
     sns.lineplot(x='Time', y='CO2', data=df.iloc[high_CO2], linewidth=2, color='r', ax=axes[1])
-    
+
     save_path = save_path = path+file[:len(file)-4]+'/graph.png'
 #    plt.savefig(save_path)
     f.savefig(save_path)
