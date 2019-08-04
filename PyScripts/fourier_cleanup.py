@@ -68,7 +68,7 @@ for file in txt_files:
 
 
     # fourier transform and filter and invert O2
-    low_O2 = analysis.fourier_filter(df.Time[1], df.O2,3,25)
+    low_O2 = analysis.fourier_filter(df.Time, df.O2,3,25,1.5)
     fft_O2 = pd.DataFrame({'Time': df.Time,'O2' : low_O2})
 
     # create scatterplot of all O2 data
@@ -89,7 +89,7 @@ for file in txt_files:
     plt.close()
 
     # fourier transform and filter and invert CO2
-    high_CO2 = analysis.fourier_filter(df.Time[1], df.CO2,3,25)
+    high_CO2 = analysis.fourier_filter(df.Time, df.CO2,3,25,1.5)
     fft_CO2 = pd.DataFrame({'Time': df.Time,'CO2' : high_CO2})
 
 
@@ -126,6 +126,6 @@ for file in txt_files:
     save_path = path+file[:len(file)-4]+'/CO2_contrast.txt'
     #CO2_df.to_csv(path_or_buf=save_path, sep='\t', header=False, index=False)
     np.savetxt(save_path, high_CO2, delimiter='\n')
-    
+
     if verb:
         print()

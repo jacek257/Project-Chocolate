@@ -31,9 +31,8 @@ def filter(f_low, f_high, freq_dom, power_spectra):
     return np.copy(cp)
 
 def fourier_filter(time_series, data, low_f, high_f, TR):
-    freq, power, disp = fourier_trans(time_series[len(time_series)-1], data)
+    freq, power, disp = fourier_trans(time_series[1], data)
     pre_invert = filter(low_f,high_f, freq, power)
-<<<<<<< HEAD
     inverted = ifft(pre_invert).real
 
 
@@ -45,9 +44,6 @@ def fourier_filter(time_series, data, low_f, high_f, TR):
     resample_ts = np.arange(0,480,TR)
     resampler = interp.interp1d(time_series, inverted, fill_value="extrapolate")
     return (resampler(resample_ts))
-=======
-    return ifft(pre_invert).real
->>>>>>> 7ad85a474f76f719626563add7fb9ad7b05ea048
 
 def showMe(*plots):
     plt.figure(figsize=(20,10))
