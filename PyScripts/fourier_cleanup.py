@@ -51,6 +51,7 @@ for file in txt_files:
     if verb:
         print("Processing ", file)
 
+    TR = 1.5
     # combine file name with path to get the full path of the file
     f_path = path+file
     # read in the data from the text files, but only keep the Time, O2, and CO2 data
@@ -68,8 +69,8 @@ for file in txt_files:
 
 
     # fourier transform and filter and invert O2
-    low_O2 = analysis.fourier_filter(df.Time, df.O2,3,25,1.5)
-    fft_O2 = pd.DataFrame({'Time': df.Time,'O2' : low_O2})
+    low_O2 = analysis.fourier_filter(df.Time, df.O2,3,25,TR)
+    fft_O2 = pd.DataFrame({'Time': np.arange(0,480,TR),'O2' : low_O2})
 
     # create scatterplot of all O2 data
     if verb:
@@ -89,8 +90,8 @@ for file in txt_files:
     plt.close()
 
     # fourier transform and filter and invert CO2
-    high_CO2 = analysis.fourier_filter(df.Time, df.CO2,3,25,1.5)
-    fft_CO2 = pd.DataFrame({'Time': df.Time,'CO2' : high_CO2})
+    high_CO2 = analysis.fourier_filter(df.Time, df.CO2,3,25,TR)
+    fft_CO2 = pd.DataFrame({'Time': np.arange(0,480,TR),'CO2' : high_CO2})
 
 
     # create scatter of all CO2 data
