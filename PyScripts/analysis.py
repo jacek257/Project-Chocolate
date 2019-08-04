@@ -32,7 +32,7 @@ def filter(f_low, f_high, freq_dom, power_spectra):
 def fourier_filter(time_series, data, low_f, high_f):
     freq, power, disp = fourier_trans(time_series, data)
     pre_invert = filter(low_f,high_f, freq, power)
-    return sg.resample(ifft(pre_invert).real,320)
+    return ifft(pre_invert).real
 
 def showMe(*plots):
     plt.figure(figsize=(20,10))
