@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 import numpy as np
 import scipy.signal as sg
+import scipy.interpolate as interp
 from scipy.fftpack import fft, ifft
 import os, sys
 
@@ -29,10 +30,20 @@ def filter(f_low, f_high, freq_dom, power_spectra):
             cp[-i] = 0
     return np.copy(cp)
 
-def fourier_filter(time_series, data, low_f, high_f):
-    freq, power, disp = fourier_trans(time_series, data)
+def fourier_filter(time_series, data, low_f, high_f, TR):
+    freq, power, disp = fourier_trans(time_series[len(time_series)-1], data)
     pre_invert = filter(low_f,high_f, freq, power)
-    return sg.resample(ifft(pre_invert).real,320)
+    inverted = ifft(pre_invert).real
+
+
+    if(time_series[len(time_series)-1]<10):
+        time_series = time_series*60
+    else:
+        time_series = time_series
+
+    resample_ts = np.arange(0,480,TR)
+    resampler = interp.interp1d(time_series, inverted, fill_value="extrapolate")
+    return (resampler(resample_ts))
 
 def showMe(*plots):
     plt.figure(figsize=(20,10))
