@@ -2,7 +2,7 @@
 
 import os, sys
 import pandas as pd
-import numpys as np
+import numpy as np
 import scipy.signal as sg
 import argparse
 import matplotlib.pyplot as plt
