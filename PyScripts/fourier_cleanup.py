@@ -92,6 +92,7 @@ for file in txt_files:
     # fourier transform and filter and invert CO2
     high_CO2 = analysis.fourier_filter(df.Time, df.CO2,3,25,TR)
     fft_CO2 = pd.DataFrame({'Time': np.arange(0,480,TR),'CO2' : high_CO2})
+    print(fft_CO2.Time)
 
 
     # create scatter of all CO2 data
