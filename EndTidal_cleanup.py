@@ -6,6 +6,7 @@ By: Jimi Cao, Austin Sophonsri
 import os
 import pandas as pd
 from scipy import signal as sg
+from scipy import interpolate
 import argparse
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -55,11 +56,16 @@ for file in txt_files:
     # read in the data from the text files, but only keep the Time, O2, and CO2 data
     df = pd.read_csv(f_path, sep='\t|,', names=['Time', 'O2', 'CO2', 'thrw', 'away'], usecols=['Time', 'O2', 'CO2'], index_col=False, engine='python')
 
+    # drop rows with missing data
     df = df.dropna()
 
-    if df.empty or df.CO2.max() < 1:
+    if df.empty:
         print(file, "dropped. Bad data")
         continue
+    
+    # need to scale CO2 data is necessary
+    if df.CO2.max() < 1:
+        df.CO2 = df.CO2 * 100
 
     # make a loop for user confirmation that O2 peak detection is good
     bad = True
@@ -74,8 +80,15 @@ for file in txt_files:
             print("Creating O2 plot ", file)
         sns.lineplot(x='Time', y='O2', data=df, linewidth=1, color='b')
 
+        # get the data points of peak
+        O2_df = df.iloc[low_O2]
+        
+        # linear interpolate the number of data points to match the scan Time
+        O2_fxn = interpolate.interp1d(O2_df.Time, O2_df.O2, fill_value='extrapolate')
+        et_O2 = O2_fxn(df.Time)
+        
         # add peak overlay onto the scatterplot
-        sns.lineplot(x='Time', y='O2', data=df.iloc[low_O2], linewidth=2, color='g')
+        sns.lineplot(x=df.Time, y=et_O2, linewidth=2, color='g')
         plt.show()
         plt.close()
 
@@ -85,7 +98,6 @@ for file in txt_files:
         if bad:
             print("The following variables can be changed: ")
             print("    1. prominence - Required prominence of peaks. Type: int")
-            print("    2. width      - Required distance between peaks. Type: int")
             try:
                 prom = int(input("New prominence (Default is 1): "))
             except:
@@ -106,8 +118,15 @@ for file in txt_files:
             print('Creating CO2 plot ', file)
         sns.lineplot(x='Time', y='CO2', data=df, linewidth=1, color='b')
 
+        # get the data points of peak
+        CO2_df = df.iloc[high_CO2]
+        
+        # linear interpolate the number of data points to match the scan Time
+        CO2_fxn = interpolate.interp1d(CO2_df.Time, CO2_df.CO2, fill_value='extrapolate')
+        et_CO2 = CO2_fxn(df.Time)
+        
         # add peak overlay onto the scatterplot
-        sns.lineplot(x='Time', y='CO2', data=df.iloc[high_CO2], linewidth=2, color='r')
+        sns.lineplot(x=df.Time, y=et_CO2, linewidth=2, color='r')
         plt.show()
         plt.close()
 
@@ -117,7 +136,6 @@ for file in txt_files:
         if bad:
             print("The following variables can be changed: ")
             print("    1. prominence - Required prominence of peaks. Type: int")
-            print("    2. width      - Required distance between peaks. Type: int")
             try:
                 prom = int(input("New prominence (Default is 1): "))
             except:
@@ -131,40 +149,35 @@ for file in txt_files:
 
     # recreate the plot because plt.show clears plt
     sns.lineplot(x='Time', y='O2', data=df, linewidth=1, color='b', ax=axes[0])
-    sns.lineplot(x='Time', y='O2', data=df.iloc[low_O2], linewidth=2, color='g', ax=axes[0])
+    sns.lineplot(x=df.Time, y=et_O2, linewidth=2, color='g', ax=axes[0])
 
     # save the plot
     if verb:
         print('Saving plots for', file)
     # recreate the plot because plt.show clears plt
     sns.lineplot(x='Time', y='CO2', data=df, linewidth=1, color='b', ax=axes[1])
-    sns.lineplot(x='Time', y='CO2', data=df.iloc[high_CO2], linewidth=2, color='r', ax=axes[1])
+    sns.lineplot(x=df.Time, y=et_CO2, linewidth=2, color='r', ax=axes[1])
 
     save_path = save_path = path+file[:len(file)-4]+'/graph.png'
-#    plt.savefig(save_path)
     f.savefig(save_path)
     if verb:
         print('Saving complete')
     f.clf()
-#    plt.close()
 
     # since the find_peaks only returns the index that the peak is found, we need to grab the actual data point
     O2_df = df.iloc[low_O2].O2
     CO2_df = df.iloc[high_CO2].CO2
 
-    O2_resamp = sg.resample(O2_df, 320)
-    CO2_resamp = sg.resample(CO2_df, 320)
-
     # make the file name and save the O2 and CO2 data into their corresponding file
     if verb:
         print("Saving O2 data for ", file)
     save_path = path+file[:len(file)-4]+'/O2_contrast.txt'
-    np.savetxt(save_path, O2_resamp, delimiter='\t')
+    np.savetxt(save_path, et_O2, delimiter='\t')
 
     if verb:
         print('Saving CO2 data for ', file)
     save_path = path+file[:len(file)-4]+'/CO2_contrast.txt'
-    np.savetxt(save_path, CO2_resamp, delimiter='\t')
+    np.savetxt(save_path, et_CO2, delimiter='\t')
 
     if verb:
         print()
