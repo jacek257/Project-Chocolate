@@ -50,9 +50,9 @@ sns.set(rc={'figure.figsize':(20,10)})
 for file in txt_files:
     if verb:
         print("Processing ", file)
-    #print("TR?:")
-    #TR = float(input())
-    TR = 1.5
+    print("TR?:")
+    TR = float(input())
+    #TR = 1.5
     # combine file name with path to get the full path of the file
     f_path = path+file
     # read in the data from the text files, but only keep the Time, O2, and CO2 data
