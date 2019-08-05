@@ -68,7 +68,7 @@ for file in txt_files:
 
     # fourier transform and filter and invert O2
     low_O2 = analysis.fourier_filter(df.Time[1], df.O2,3,25)
-    fft_O2 = pd.DataFrame({'Time': np.linspace(0, df.Time[-1],320),'O2' : Low_O2)
+    fft_O2 = pd.DataFrame({'Time': np.linspace(0, df.Time[-1],320),'Resample' : Low_O2)
 
     # create scatterplot of all O2 data
     if verb:
@@ -89,7 +89,7 @@ for file in txt_files:
 
     # fourier transform and filter and invert CO2
     high_CO2 = analysis.fourier_filter(df.Time[1], df.CO2,3,25)
-    fft_CO2 = pd.DataFrame({'Time': np.linspace(0, df.Time[-1],320),'CO2' : high_CO2)
+    fft_CO2 = pd.DataFrame({'Time': np.linspace(0, df.Time[-1],320),'Resample' : high_CO2)
 
 
     # create scatter of all CO2 data
