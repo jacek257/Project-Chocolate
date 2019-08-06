@@ -50,8 +50,8 @@ sns.set(rc={'figure.figsize':(20,10)})
 for file in txt_files:
     if verb:
         print("Processing ", file)
-    print("TR?:")
-    TR = float(input())
+    print("num of slices:")
+    TR = 480/float(input())
     #TR = 1.5
     # combine file name with path to get the full path of the file
     f_path = path+file
@@ -129,12 +129,18 @@ for file in txt_files:
     # make the file name and save the O2 and CO2 data into their corresponding file
     if verb:
         print("Saving O2 data for ", file)
+        print("=========================================")
+        print(path+file[:len(file)-4]+'/O2_contrast.txt')
+        print('\n\n')
     save_path = path+file[:len(file)-4]+'/O2_contrast.txt'
     # O2_df.to_csv(path_or_buf=save_path, sep='\t', header=False, index=False)
     np.savetxt(save_path, low_O2, delimiter='\n')
 
     if verb:
         print('Saving CO2 data for ', file)
+        print("+++++++++++++++++++++++++++++++++++++++++")
+        print(path+file[:len(file)-4]+'/CO2_contrast.txt')
+        print('\n\n')
     save_path = path+file[:len(file)-4]+'/CO2_contrast.txt'
     #CO2_df.to_csv(path_or_buf=save_path, sep='\t', header=False, index=False)
     np.savetxt(save_path, high_CO2, delimiter='\n')
