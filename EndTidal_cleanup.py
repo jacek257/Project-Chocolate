@@ -61,6 +61,7 @@ for file in txt_files:
 
     if df.empty:
         print(file, "dropped. Bad data")
+        os.rmdir(f_path[:-4])
         continue
     
     # need to scale CO2 data is necessary
