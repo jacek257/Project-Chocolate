@@ -7,6 +7,9 @@ import os,sys
 import subprocess
 import argparse
 import pandas as pd
+import numpy as np
+import analysis
+import json
 
 # instantiate the argument parser
 parser = argparse.ArgumentParser()
@@ -28,6 +31,7 @@ graph = (True if args.graph else  False)
 ###########set directories (TODO, automate)
 nifti_dir = '/media/labrat/395Mount/FSL_work/SH_NII/'
 freesurfer_t1_dir = '/media/labrat/395Mount/FSL_work/FS_SH/'
+feat_dir = '/media/labrat/395Mount/FSL_work/feat/'
 
 
 # make sure the path ends with '/'
@@ -79,9 +83,20 @@ for i in range(len(p_df)):
 #append bold, FS paths, and conditional to p_df
 p_df = pd.concat((p_df, pd.DataFrame(nii_paths)), axis=1)
 
-#drop all false conditional rows and conditional column
+#drop all false conditional rows and conditional column and reset indeces
 p_df = p_df[p_df.boldFS_exists != False].drop('boldFS_exists', axis = 1)
+p_df = p_df.reset_index(drop=True)
 
+#get json files and read CSV
+tr_dict = {'TR' : []}
+for f_path in p_df.BOLD_path:
+    # print(f_path[:-5]+'.json')
+    with open(f_path[:-5]+'.json', 'r') as j_file:
+        data = json.load(j_file)
+        # print(data['RepetitionTime'])
+        tr_dict['TR'].append(data['RepetitionTime'])
+
+p_df = pd.concat((p_df, pd.DataFrame(tr_dict)), axis=1)
 print('\n',p_df.head())
 
 #get number of volumes
@@ -89,25 +104,27 @@ print('\n',p_df.head())
 p_df["Dimension"] = [int(subprocess.run(['fslinfo' ,b_path], stdout=subprocess.PIPE).stdout.decode('utf-8').replace('\n',' ').split()[9]) for b_path in p_df.BOLD_path]
 #choose non-trivial bold series
 p_df = p_df[p_df.Dimension >=150]
+p_df = p_df.reset_index(drop=True)
 print('\n',p_df.head())
 
 ####run EndTidal Cleaning and return paths
 #make endtidal folders
 
-ET_dict = {'ETO2' : [], 'ETCO2' : [], 'ET_exists' : []}
+ET_dict = {'ETO2' : [], 'ETCO2' : [], 'ET_exists' : [], 'ID2' : []}
 
-for f_path in p_df.EndTidal_Path:
+for f_path, dim, id in zip(p_df.EndTidal_Path, p_df.Dimension, p_df.ID):
     if not os.path.exists(f_path[:-4]):
         os.mkdir(f_path[:-4])
 
     #perfrom cleaning and load into p_df
     #load data into DataFrame
-    df = pd.read_csv(f_path, sep='\t|,', names=['Time', 'O2', 'CO2', 'thrw', 'away'], usecols=['Time', 'O2', 'CO2'], index_col=False, engine='python')
+    ET_dict['ID2'].append(id)
+    endTidal = pd.read_csv(f_path, sep='\t|,', names=['Time', 'O2', 'CO2', 'thrw', 'away'], usecols=['Time', 'O2', 'CO2'], index_col=False, engine='python')
     #drop rows with missing cols
-    df = df.dropna()
+    endTidal = endTidal.dropna()
 
     #skip if DataFrame is empty
-    if df.empty:
+    if endTidal.empty:
         os.rmdir(f_path[:-4])
         ET_dict['ETO2'].append('')
         ET_dict['ETCO2'].append('')
@@ -115,18 +132,67 @@ for f_path in p_df.EndTidal_Path:
         continue
 
     # need to scale CO2 data is necessary
-    if df.CO2.max() < 1:
-        df.CO2 = df.CO2 * 100
+    if endTidal.CO2.max() < 1:
+        endTidal.CO2 = endTidal.CO2 * 100
 
     #get fourier cleaned data
-    #generate and store cleaned data paths
-    print(df.O2[:5])
-    print(df.CO2[:5])
+    processed_O2 = analysis.fourier_filter(endTidal.Time, endTidal.O2, 3, 35, 480.0/dim)
+    processed_CO2 = analysis.fourier_filter(endTidal.Time, endTidal.CO2, 3, 35, 480.0/dim)
+
+    #generate cleaned data paths
+    save_O2 = f_path[:-4]+'/O2_contrast.txt'
+    save_CO2 = f_path[:-4]+'/CO2_contrast.txt'
+
+    #storing cleaned data paths
+    ET_dict['ETO2'].append(save_O2)
+    ET_dict['ETCO2'].append(save_CO2)
+    ET_dict['ET_exists'].append(True)
+
     #save data
+    np.savetxt(save_O2, processed_O2, delimiter='\n')
+    np.savetxt(save_CO2, processed_CO2, delimiter='\n')
+
+#construct new DataFrame
+et_frame = pd.DataFrame(ET_dict)
+
+#concat and rop bad dataframes
+p_df = pd.concat((p_df, pd.DataFrame(ET_dict)), axis=1)
+p_df = p_df[p_df.ET_exists != False].drop('ET_exists', axis = 1)
+
+#reset indeces
+p_df = p_df.reset_index(drop=True)
+
+print(p_df.head())
 
 #run Feat
+#check for (and make) feat directory
+if not os.path.exists(feat_dir):
+    os.mkdir(feat_dir)
 
+#make design file directory
+if not os.path.exists(feat_dir+'design_files/'):
+    os.mkdir(feat_dir+'design_files/')
 
+#load design template
+with open(feat_dir+'design_files/template', 'r') as template:
+    stringTemp = template.read()
+    for i in range(len(p_df)):
+        output_dir = feat_dir+p_df.Cohort[i]+p_df.ID[i]
+        # if not os.path.exists(output_dir):
+        #     os.mkdir(output_dir)
+        to_write = stringTemp[:]
+        # print(to_write)
+        to_write = to_write.replace("%%OUTPUT_DIR%%",'"'+output_dir+'"')
+        to_write = to_write.replace("%%VOLUMES%%",'"'+str(p_df.Dimension[i])+'"')
+        to_write = to_write.replace("%%TR%%",'"'+str(p_df.TR[i])+'"')
+        to_write = to_write.replace("%%BOLD_FILE%%",'"'+p_df.BOLD_path[i]+'"')
+        to_write = to_write.replace("%%FS_T1%%",'"'+p_df.T1_path[i]+'"')
+        to_write = to_write.replace("%%O2_CONTRAST%%",'"'+p_df.ETO2[i]+'"')
+        to_write = to_write.replace("%%CO2_CONTRAST%%",'"'+p_df.ETCO2[i]+'"')
+
+        with open(feat_dir+'design_files/'+p_df.ID[i]+'.fsf', 'w+') as outFile:
+            outFile.write(to_write)
+        # print('written')
 
 
 
