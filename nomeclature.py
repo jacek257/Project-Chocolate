@@ -192,6 +192,8 @@ with open(feat_dir+'design_files/template', 'r') as template:
 
         with open(feat_dir+'design_files/'+p_df.ID[i]+'.fsf', 'w+') as outFile:
             outFile.write(to_write)
+            
+        os.spawnlp(os.P_NOWAIT, 'feat', 'feat', feat_dir+'design_files/'+p_df.ID[i]+'.fsf')
         # print('written')
 
 
