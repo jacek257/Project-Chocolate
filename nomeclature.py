@@ -1,9 +1,9 @@
 '''
-By: Austin Sophonsri
+By: Austin Sophonsri, Jimi Cao
 
 '''
 
-import os,sys
+import os
 import subprocess
 import argparse
 import pandas as pd
@@ -20,6 +20,7 @@ parser.add_argument("path", help="path of the folder that contains all the endti
 # add optional arguments
 parser.add_argument("-v", "--verbose", action='store_true', help="incrase output verbosity")
 parser.add_argument("-g", "--graph", action='store_true', help='display graphs as it is generated')
+parser.add_argument("-f", "--fouier", action='store_true', help='switch analysis to fouier instead of default peak_find')
 
 #get the positional arguments
 args = parser.parse_args()
@@ -27,11 +28,12 @@ path = args.path
 
 verb = (True if args.verbose else False)
 graph = (True if args.graph else  False)
+four = True if args.fouier else False
 
 ###########set directories (TODO, automate)
-nifti_dir = '/media/labrat/395Mount/FSL_work/SH_NII/'
-freesurfer_t1_dir = '/media/labrat/395Mount/FSL_work/FS_SH/'
-feat_dir = '/media/labrat/395Mount/FSL_work/feat/'
+nifti_dir = '/home/ke/Desktop/FSL_work/SH_info/'
+freesurfer_t1_dir = '/home/ke/Desktop/FSL_work/SH_FST1/'
+feat_dir = '/home/ke/Desktop/FSL_work/feat/'
 
 
 # make sure the path ends with '/'
@@ -40,8 +42,6 @@ if path[-1] != '/':
 
 # all grab all the .txt files in the endtidal folder
 txt_files = [file for file in os.listdir(path) if file.endswith('edits.txt')]
-
-print(txt_files[:5])
 
 #separate patient ID and scan date and pack into tuple
 p_df = pd.DataFrame({
@@ -53,12 +53,11 @@ p_df = pd.DataFrame({
                 'EndTidal_Path': [path+f for f in txt_files]
              })
 
-print(p_df.head())
+#print(p_df.head())
 #create patient bold scan listdir (is a list not DataFrame)
 patient_BOLDS_header = [p_df.Cohort[i]+p_df.ID[i]+'_BOLD_'+p_df.Year[i]+p_df.Month[i]+p_df.Day[i]
                     for i in range(len(p_df))]
 
-print(patient_BOLDS_header[:5])
 
 #get bold and FS paths
 nii_paths = {'BOLD_path' : [], 'T1_path' : [], 'boldFS_exists': []}
@@ -90,14 +89,14 @@ p_df = p_df.reset_index(drop=True)
 #get json files and read CSV
 tr_dict = {'TR' : []}
 for f_path in p_df.BOLD_path:
-    # print(f_path[:-5]+'.json')
+    #print(f_path[:-5]+'.json')
     with open(f_path[:-5]+'.json', 'r') as j_file:
         data = json.load(j_file)
-        # print(data['RepetitionTime'])
+        #print(data['RepetitionTime'])
         tr_dict['TR'].append(data['RepetitionTime'])
 
 p_df = pd.concat((p_df, pd.DataFrame(tr_dict)), axis=1)
-print('\n',p_df.head())
+#print('\n',p_df.head())
 
 #get number of volumes
 #run fslinfo and pipe -> python buffer -> replace \n with ' ' -> split into list -> choose correct index -> convert string to int
@@ -105,7 +104,7 @@ p_df["Dimension"] = [int(subprocess.run(['fslinfo' ,b_path], stdout=subprocess.P
 #choose non-trivial bold series
 p_df = p_df[p_df.Dimension >=150]
 p_df = p_df.reset_index(drop=True)
-print('\n',p_df.head())
+#print('\np_df w/ dim > 150\n',p_df.head())
 
 ####run EndTidal Cleaning and return paths
 #make endtidal folders
@@ -134,10 +133,17 @@ for f_path, dim, id in zip(p_df.EndTidal_Path, p_df.Dimension, p_df.ID):
     # need to scale CO2 data is necessary
     if endTidal.CO2.max() < 1:
         endTidal.CO2 = endTidal.CO2 * 100
+        
+    interp_time = 510.0/dim
 
-    #get fourier cleaned data
-    processed_O2 = analysis.fourier_filter(endTidal.Time, endTidal.O2, 3, 35, 480.0/dim)
-    processed_CO2 = analysis.fourier_filter(endTidal.Time, endTidal.CO2, 3, 35, 480.0/dim)
+    if four:
+        #get fourier cleaned data
+        processed_O2 = analysis.fourier_filter(endTidal.Time, endTidal.O2, 3, 35, interp_time)
+        processed_CO2 = analysis.fourier_filter(endTidal.Time, endTidal.CO2, 3, 35, interp_time)
+    else:
+        #get peak data
+        processed_CO2, processed_O2 = analysis.get_peaks(df=endTidal, verb=verb, file=f_path, TR=interp_time)
+    
 
     #generate cleaned data paths
     save_O2 = f_path[:-4]+'/O2_contrast.txt'
@@ -149,8 +155,11 @@ for f_path, dim, id in zip(p_df.EndTidal_Path, p_df.Dimension, p_df.ID):
     ET_dict['ET_exists'].append(True)
 
     #save data
-    np.savetxt(save_O2, processed_O2, delimiter='\n')
-    np.savetxt(save_CO2, processed_CO2, delimiter='\n')
+    np.savetxt(save_O2, processed_O2, delimiter='\t')
+    np.savetxt(save_CO2, processed_CO2, delimiter='\t')
+    
+    # save and create plots
+    analysis.save_plots(df=endTidal, O2=processed_O2, CO2=processed_CO2, f_path=f_path, verb=verb, TR=interp_time)
 
 #construct new DataFrame
 et_frame = pd.DataFrame(ET_dict)
