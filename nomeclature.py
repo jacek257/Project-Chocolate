@@ -18,6 +18,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("path", help="path of the folder that contains all the endtidal edit files")
 
 # add optional arguments
+parser.add_argument("-c", "--covert", type=str, help="convert dcm to nii")
 parser.add_argument("-v", "--verbose", action='store_true', help="incrase output verbosity")
 parser.add_argument("-g", "--graph", action='store_true', help='display graphs as it is generated')
 parser.add_argument("-f", "--fouier", action='store_true', help='switch analysis to fouier instead of default peak_find')
