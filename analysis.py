@@ -45,6 +45,12 @@ def fourier_filter(time_series, data, low_f, high_f, TR):
     resampler = interp.interp1d(time_series, inverted, fill_value="extrapolate")
     return (resampler(resample_ts))
 
+def fourier_filter_no_resample(time_series, data, low_f, high_f):
+    freq, power, disp = fourier_trans(time_series[1], data)
+    pre_invert = filter(low_f,high_f, freq, power)
+    inverted = ifft(pre_invert).real
+    return inverted
+
 def showMe(*plots):
     plt.figure(figsize=(20,10))
     for p in plots:
