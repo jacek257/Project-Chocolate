@@ -111,28 +111,13 @@ def get_peaks(df, verb, file, TR):
     if(df.Time[len(df)-1]<10):
         df.Time = df.Time*60
     
-    #construct interpolation time_step series
-    resample_ts = np.arange(0,480,TR)
-    
-    # make another loop for user confirmation that CO2 peak detection is good
+    # make a loop for user confirmation that O2 peak detection is good
     bad = True
     prom = 1
-
-def main():
-    f_path = sys.argv[1]
-    processed_dir = os.path.dirname(f_path)+'/processed'
-    print(processed_dir)
-
-main()
-
-# processed_data_path = sys.arg[3]+'contrasts/'
-# if(not os.path.exists(processed_data_path)):
-#     os.mkdir(processed_data_path)
-#     print ('path created')
-#
-# np.savetxt(processed_data_path+"contrast_O2.txt",downO.real, fmt = '%.18f', delimiter='\n')
-# np.savetxt(processed_data_path+"contrast_CO2.txt", downC.real, fmt = '%.18f', delimiter='\n')
-
+    while bad:
+        # get the troughs of the O2 data
+        low_O2, _ = sg.find_peaks(df.O2.apply(lambda x:x*-1), prominence=prom)
+        
         # create scatterplot of all O2 data
         if verb:
             print("Creating O2 plot ", file)
@@ -140,13 +125,9 @@ main()
 
         # get the data points of peak
         O2_df = df.iloc[low_O2]
-        
-        # linear interpolate the number of data points to match resample_ts
-        O2_fxn = interp.interp1d(O2_df.Time, O2_df.O2, fill_value='extrapolate')
-        et_O2 = O2_fxn(resample_ts)
 
         # add peak overlay onto the scatterplot
-        sns.lineplot(x=resample_ts, y=et_O2, linewidth=2, color='g')
+        sns.lineplot(x='Time', y='O2', data=O2_df, linewidth=2, color='g')
         plt.show()
         plt.close()
 
@@ -178,12 +159,8 @@ main()
         # get the data points of peak
         CO2_df = df.iloc[high_CO2]
 
-        # linear interpolate the number of data points to match the scan Time
-        CO2_fxn = interp.interp1d(CO2_df.Time, CO2_df.CO2, fill_value='extrapolate')
-        et_CO2 = CO2_fxn(resample_ts)
-
         # add peak overlay onto the scatterplot
-        sns.lineplot(x=resample_ts, y=et_CO2, linewidth=2, color='r')
+        sns.lineplot(x='Time', y='CO2', data=CO2_df, linewidth=2, color='r')
         plt.show()
         plt.close()
 
@@ -201,7 +178,7 @@ main()
 
     plt.close()
     
-    return et_CO2, et_O2
+    return CO2_df.CO2, O2_df.O2
 
 def save_plots(df, O2, CO2, f_path, verb, TR):
     
