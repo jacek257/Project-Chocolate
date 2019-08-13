@@ -52,34 +52,26 @@ def filter(f_low, f_high, freq_dom, power_spectra):
             cp[-i] = 0
     return np.copy(cp)
 
-def fourier_filter(time_steps, data, low_f, high_f, TR):
-    """
-    Driver module: runs fourier_trans() and filter()
-
-    time_steps = time_step list
-    data = data to be analyzed
-    low_f = lower frequency bound
-    high_f = upper frequency bound
-    TR = repetition time: found in BOLD .json
-    """
-
-    # fourier transform data
-    freq, power, disp = fourier_trans(time_steps[1], data)
-    #filter data
+def fourier_filter(time_series, data, low_f, high_f, TR):
+    freq, power, disp = fourier_trans(time_series[1], data)
     pre_invert = filter(low_f,high_f, freq, power)
-    #invert data and discard imaginary part
     inverted = ifft(pre_invert).real
 
-    #convert time series to seconds
-    if(time_steps[len(time_steps)-1]<10):
-        time_steps = time_steps*60
-    else:
-        time_steps = time_steps
 
-    #construct interpolation time_step series
+    if(time_series[len(time_series)-1]<10):
+        time_series = time_series*60
+    else:
+        time_series = time_series
+
     resample_ts = np.arange(0,480,TR)
-    resampler = interp.interp1d(time_steps, inverted, fill_value="extrapolate")
+    resampler = interp.interp1d(time_series, inverted, fill_value="extrapolate")
     return (resampler(resample_ts))
+
+def fourier_filter_no_resample(time_series, data, low_f, high_f):
+    freq, power, disp = fourier_trans(time_series[1], data)
+    pre_invert = filter(low_f,high_f, freq, power)
+    inverted = ifft(pre_invert).real
+    return inverted
 
 def showMe(*plots):
     plt.figure(figsize=(20,10))
@@ -126,9 +118,20 @@ def get_peaks(df, verb, file, TR):
     bad = True
     prom = 1
 
-    while bad:
-        # get the troughs of the O2 data
-        low_O2, _ = sg.find_peaks(df.O2.apply(lambda x:x*-1), prominence=prom)
+def main():
+    f_path = sys.argv[1]
+    processed_dir = os.path.dirname(f_path)+'/processed'
+    print(processed_dir)
+
+main()
+
+# processed_data_path = sys.arg[3]+'contrasts/'
+# if(not os.path.exists(processed_data_path)):
+#     os.mkdir(processed_data_path)
+#     print ('path created')
+#
+# np.savetxt(processed_data_path+"contrast_O2.txt",downO.real, fmt = '%.18f', delimiter='\n')
+# np.savetxt(processed_data_path+"contrast_CO2.txt", downC.real, fmt = '%.18f', delimiter='\n')
 
         # create scatterplot of all O2 data
         if verb:

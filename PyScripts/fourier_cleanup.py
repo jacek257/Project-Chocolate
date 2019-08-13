@@ -50,7 +50,9 @@ sns.set(rc={'figure.figsize':(20,10)})
 for file in txt_files:
     if verb:
         print("Processing ", file)
-
+    print("num of slices:")
+    TR = 480/float(input())
+    #TR = 1.5
     # combine file name with path to get the full path of the file
     f_path = path+file
     # read in the data from the text files, but only keep the Time, O2, and CO2 data
@@ -61,6 +63,11 @@ for file in txt_files:
     if df.empty:
         print(file, " dropped. File did not contain the correct amount of data")
         continue
+    
+    fractional_time=False
+    if df.Time[len(df.Time)-1] < 10:
+        fractional_time=True
+        
 
     # make the directory that the contrast data will be saved to if directory doesn't exist
     if not os.path.exists(f_path[:-4]):
@@ -68,16 +75,18 @@ for file in txt_files:
 
 
     # fourier transform and filter and invert O2
-    low_O2 = analysis.fourier_filter(df.Time[1], df.O2,3,25)
-    fft_O2 = pd.DataFrame({'Time': np.linspace(0, df.Time[len(df.Time)-1],320),'O2' : low_O2})
+    low_O2 = analysis.fourier_filter(df.Time, df.O2,3,50,TR)
+    fft_O2 = pd.DataFrame({'Time': np.arange(0,480,TR),'O2' : low_O2})
 
     # create scatterplot of all O2 data
     if verb:
         print("Creating O2 plot ", file)
-    sns.lineplot(x='Time', y='O2', data=df, linewidth=1, color='b')
+    #sns.lineplot(x='Time', y='O2', data=df, linewidth=1, color='b')
+    plt.plot(df.Time, df.O2, linewidth=1, color='blue')
 
     # add peak overlay onto the scatterplot
-    sns.lineplot(x='Time', y='O2', data=fft_O2, linewidth=4, color='g')
+    #sns.lineplot(x='Time', y='O2', data=fft_O2, linewidth=4, color='g')
+    plt.plot(fft_O2.Time, fft_O2.O2, linewidth=4, color='red')
 
     # save the plot
     if verb:
@@ -89,17 +98,20 @@ for file in txt_files:
     plt.close()
 
     # fourier transform and filter and invert CO2
-    high_CO2 = analysis.fourier_filter(df.Time[1], df.CO2,3,25)
-    fft_CO2 = pd.DataFrame({'Time': np.linspace(0, df.Time[len(df.Time)-1],320),'CO2' : high_CO2})
+    high_CO2 = analysis.fourier_filter(df.Time, df.CO2,3,50,TR)
+    fft_CO2 = pd.DataFrame({'Time': np.arange(0,480,TR),'CO2' : high_CO2})
+    #print(fft_CO2.Time)
 
 
     # create scatter of all CO2 data
     if verb:
         print('Creating CO2 plot ', file)
-    sns.lineplot(x='Time', y='CO2', data=df, linewidth=1, color='b')
+    #sns.lineplot(x='Time', y='CO2', data=df, linewidth=1, color='b')
+    plt.plot(df.Time, df.CO2, linewidth=1, color='blue')
 
     # add peak overlay onto the scatterplot
-    sns.lineplot(x='Time', y='CO2', data=fft_CO2, linewidth=4, color='r')
+    #sns.lineplot(x='Time', y='CO2', data=fft_CO2, linewidth=4, color='r')
+    plt.plot(fft_CO2.Time, fft_CO2.CO2, linewidth=4, color='red')
 
     # save the plot
     if verb:
@@ -117,15 +129,21 @@ for file in txt_files:
     # make the file name and save the O2 and CO2 data into their corresponding file
     if verb:
         print("Saving O2 data for ", file)
+        print("=========================================")
+        print(path+file[:len(file)-4]+'/O2_contrast.txt')
+        print('\n\n')
     save_path = path+file[:len(file)-4]+'/O2_contrast.txt'
     # O2_df.to_csv(path_or_buf=save_path, sep='\t', header=False, index=False)
     np.savetxt(save_path, low_O2, delimiter='\n')
 
     if verb:
         print('Saving CO2 data for ', file)
+        print("+++++++++++++++++++++++++++++++++++++++++")
+        print(path+file[:len(file)-4]+'/CO2_contrast.txt')
+        print('\n\n')
     save_path = path+file[:len(file)-4]+'/CO2_contrast.txt'
     #CO2_df.to_csv(path_or_buf=save_path, sep='\t', header=False, index=False)
     np.savetxt(save_path, high_CO2, delimiter='\n')
-    
+
     if verb:
         print()
