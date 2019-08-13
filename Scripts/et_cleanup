@@ -1,6 +1,0 @@
-#!/bin/bash
-
-py_path=~/Desktop/Project-Chocolate
-script_name=EndTidal_cleanup.py
-
-python3 $py_path$script_name $@
