@@ -201,6 +201,9 @@ def get_peaks(df, verb, file, TR):
     return et_CO2, et_O2
 
 def save_plots(df, O2, CO2, f_path, verb, TR):
+    
+    #TODO: add BOLD, centroid, and shifted O2/CO2 graphs
+    
     """
     Create and saves plots for CO2 and O2 data
     
@@ -224,17 +227,17 @@ def save_plots(df, O2, CO2, f_path, verb, TR):
     sns.set(rc={'figure.figsize':(20,10)})
     
     #construct interpolation time_step series
-    resample_ts = np.arange(0,480,TR)
+    resample_ts = np.arange(0,510,TR)
 
     # create subplots for png file later
-    f, axes = plt.subplots(2, 1)
+    f, axes = plt.subplots(2, 3)
 
     # recreate the plot because plt.show clears plt
-    sns.lineplot(x='Time', y='O2', data=df, linewidth=1, color='b', ax=axes[0])
-    sns.lineplot(x=resample_ts, y=O2, linewidth=2, color='g', ax=axes[0])
+    sns.lineplot(x='Time', y='O2', data=df, linewidth=1, color='b', ax=axes[0, 0])
+    sns.lineplot(x=resample_ts, y=O2, linewidth=2, color='g', ax=axes[0, 0])
     # recreate the plot because plt.show clears plt
-    sns.lineplot(x='Time', y='CO2', data=df, linewidth=1, color='b', ax=axes[1])
-    sns.lineplot(x=resample_ts, y=CO2, linewidth=2, color='r', ax=axes[1])
+    sns.lineplot(x='Time', y='CO2', data=df, linewidth=1, color='b', ax=axes[1, 0])
+    sns.lineplot(x=resample_ts, y=CO2, linewidth=2, color='r', ax=axes[1, 0])
 
     # save the plot
     if verb:

@@ -19,7 +19,6 @@ parser.add_argument("path", help="path of the folder that contains all the endti
 
 # add optional arguments
 parser.add_argument("-v", "--verbose", action='store_true', help="incrase output verbosity")
-parser.add_argument("-g", "--graph", action='store_true', help='display graphs as it is generated')
 parser.add_argument("-f", "--fouier", action='store_true', help='switch analysis to fouier instead of default peak_find')
 
 #get the positional arguments
@@ -27,7 +26,6 @@ args = parser.parse_args()
 path = args.path
 
 verb = (True if args.verbose else False)
-graph = (True if args.graph else  False)
 four = True if args.fouier else False
 
 ###########set directories (TODO, automate)
