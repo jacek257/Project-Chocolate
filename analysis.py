@@ -232,7 +232,7 @@ def save_plots(df, O2, CO2, f_path, verb, TR):
     if verb:
         print()
 
-def get_cost(sig1, sig2):
+def get_r2(sig1, sig2):
     if(len(sig1) != len(sig1)):
         print("Signals have different lengths: ", len(sig1) , ' &', len(sig2))
     else:
