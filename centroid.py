@@ -1,6 +1,12 @@
 import numpy as np
+import matplotlib
+import matplotlib.pyplot as plt
+import pandas as pd
 import scipy.signal as sg
 import scipy.interpolate as interp
+import seaborn as sns
+import time
+from tqdm import tqdm
 
 #acknowledgements:
 #https://ws680.nist.gov/publication/get_pdf.cfm?pub_id=901379
@@ -118,7 +124,7 @@ def grad_C3(C1, C2, C3, S1, S2, B):
         buffer += grad_constant(C1, C2, C3, s1n, s2n, bn)/len(S1)
     return buffer
 
-def linear_optimize(init_tuple, S1, S2, B, descent_speed=.1, lifespan = 100, epochs = 3):
+def linear_optimize(S1, S2, B, init_tuple = (0,0,0), descent_speed=.1, lifespan = 100):
     """
     linear coefficient optimizer by gradient descent
     returns (C1, C2, C3)
@@ -129,20 +135,63 @@ def linear_optimize(init_tuple, S1, S2, B, descent_speed=.1, lifespan = 100, epo
     S2 (iterable) = signal 2
     B (iterable) = base signal
     descent_speed (float) = descending step size
-    lifespan = number of steps per epoch
-    epochs = number of step sizes
+    lifespan = number of descending steps
     """
-    curr_C1 = init_tuple[0]
-    curr_C2 = init_tuple[1]
-    curr_C3 = init_tuple[2]
+        factor1 = np.max(S1)
+    factor2 = np.max(S2)
+    factorB = np.max(B)
+
+    S1 = S1/factor1
+    S2 = S2/factor2
+    B = B/factorB
+
+    curr_C1 = init_tuple[0]*factor1/factorB
+    curr_C2 = init_tuple[1]*factor2/factorB
+    curr_C3 = init_tuple[2]/factorB
 
 
-    for precision in range(epochs):
-        print('EPOCH:     ', precision)
-        time.sleep(.25)
-        for i in tqdm(range(lifespan)):
-            curr_C1 = curr_C1 - (descent_speed**(precision+1)* grad_C1(curr_C1, curr_C2, curr_C3, S1, S2, B))
-            curr_C2 = curr_C2 - (descent_speed**precision)* grad_C1(curr_C1, curr_C2, curr_C3, S1, S2, B)
-            curr_C3 = curr_C3 - (descent_speed**precision)* grad_C1(curr_C1, curr_C2, curr_C3, S1, S2, B)
-    return_tuple = (curr_C1, curr_C2, curr_C3)
+    for i in tqdm(range(lifespan)):
+        curr_C1 = curr_C1 - (descent_speed* grad_C1(curr_C1, curr_C2, curr_C3, S1, S2, B))
+        curr_C2 = curr_C2 - (descent_speed* grad_C1(curr_C1, curr_C2, curr_C3, S1, S2, B))
+        curr_C3 = curr_C3 - (descent_speed* grad_C1(curr_C1, curr_C2, curr_C3, S1, S2, B))
+
+    return_tuple = (curr_C1*factorB/factor1, curr_C2*factorB/factor2, curr_C3*factorB)
+
+    S1 = S1*factor1
+    S2 = S2*factor2
+    B = B*factorB
+    return return_tuple
+
+def stochastic_optimize(S1, S2, B, init_tuple = (0,0,0), descent_speed=.1, lifespan = 100):
+    factor1 = np.max(S1)
+    factor2 = np.max(S2)
+    factorB = np.max(B)
+
+    S1 = S1/factor1
+    S2 = S2/factor2
+    B = B/factorB
+
+    curr_C1 = init_tuple[0]*factor1/factorB
+    curr_C2 = init_tuple[1]*factor2/factorB
+    curr_C3 = init_tuple[2]/factorB
+
+    pC1 = 0.0
+    pC2 = 0.0
+    pC3 = 0.0
+
+    for i in tqdm(range(lifespan)):
+        pC1 = p_factor*pC1 + (1.0-p_factor)*grad_C1(curr_C1, curr_C2, curr_C3, S1, S2, B)
+        pC2 = p_factor*pC2 + (1.0-p_factor)*grad_C2(curr_C1, curr_C2, curr_C3, S1, S2, B)
+        pC3 = p_factor*pC3 + (1.0-p_factor)*grad_C3(curr_C1, curr_C2, curr_C3, S1, S2, B)
+
+        curr_C1 = curr_C1 - (descent_speed* pC1)
+        curr_C2 = curr_C2 - (descent_speed* pC2)
+        curr_C3 = curr_C3 - (descent_speed* pC3)
+
+
+    return_tuple = (curr_C1*factorB/factor1, curr_C2*factorB/factor2, curr_C3*factorB)
+    
+    S1 = S1*factor1
+    S2 = S2*factor2
+    B = B*factorB
     return return_tuple

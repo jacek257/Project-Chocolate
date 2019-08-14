@@ -82,11 +82,11 @@ def showMe(*plots):
 def plotFourier(freq_dom, plottable):
     plt.figure(figsize=(20,10))
     plt.semilogx(x = freq_dom, y = plottable)
-    
+
 def get_peaks(df, verb, file, TR):
     """
     Get the peaks and troughs of CO2 and O2
-    
+
     Parameters:
         df: dataframe
             data structure that holds the data
@@ -96,28 +96,28 @@ def get_peaks(df, verb, file, TR):
             file name to be displayed during verbose output
         TR: float
             repetition time, found in BOLD.json
-    
+
     Returns:
         et_O2: array-like
             the end-tidal O2 data
         et_CO2: array-like
             the end-tidal CO2 data
-    """    
-    
+    """
+
     # set the size of the graphs
     sns.set(rc={'figure.figsize':(20,10)})
-    
+
     #convert time series to seconds
     if(df.Time[len(df)-1]<10):
         df.Time = df.Time*60
-    
+
     # make a loop for user confirmation that O2 peak detection is good
     bad = True
     prom = 1
     while bad:
         # get the troughs of the O2 data
         low_O2, _ = sg.find_peaks(df.O2.apply(lambda x:x*-1), prominence=prom)
-        
+
         # create scatterplot of all O2 data
         if verb:
             print("Creating O2 plot ", file)
@@ -177,16 +177,16 @@ def get_peaks(df, verb, file, TR):
                 prom = 1
 
     plt.close()
-    
+
     return CO2_df.CO2, O2_df.O2
 
 def save_plots(df, O2, CO2, f_path, verb, TR):
-    
+
     #TODO: add BOLD, centroid, and shifted O2/CO2 graphs
-    
+
     """
     Create and saves plots for CO2 and O2 data
-    
+
     Parameters:
         df: dataframe
             data structure that holds the data
@@ -198,14 +198,14 @@ def save_plots(df, O2, CO2, f_path, verb, TR):
             flag for verbose output
         TR: float
             repitition time from json
-    
+
     Returns:
         None
     """
-    
+
     # set the size of the graphs
     sns.set(rc={'figure.figsize':(20,10)})
-    
+
     #construct interpolation time_step series
     resample_ts = np.arange(0,510,TR)
 
@@ -222,7 +222,7 @@ def save_plots(df, O2, CO2, f_path, verb, TR):
     # save the plot
     if verb:
         print('Saving plots for', f_path)
-        
+
     save_path = save_path = f_path[:-4]+'/graph.png'
     f.savefig(save_path)
     if verb:
@@ -232,7 +232,8 @@ def save_plots(df, O2, CO2, f_path, verb, TR):
     if verb:
         print()
 
-def main():
-    f_path = sys.argv[1]
-    processed_dir = os.path.dirname(f_path)+'/processed'
-    print(processed_dir)
+def get_cost(sig1, sig2):
+    if(len(sig1) != len(sig1)):
+        print("Signals have different lengths: ", len(sig1) , ' &', len(sig2))
+    else:
+        return np.sum((sig1-sig2)**2)
