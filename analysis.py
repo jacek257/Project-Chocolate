@@ -14,12 +14,16 @@ from tqdm import tqdm
 
 class fft_analysis(object):
     """docstring for fft_analysis."""
-    def getDataArray(f_path):
+
+    def __init__(self):
+        super(fft_analysis, self).__init__()
+
+    def getDataArray(self, f_path):
         df = pd.read_csv(f_path, sep='\t', names=['Time', 'O2', 'CO2', 'thrw', 'away'],
                      usecols=['Time', 'O2', 'CO2'], index_col=False)
         return df[["Time","O2","CO2"]]
 
-    def fourier_trans(t_step, data):
+    def fourier_trans(self, t_step, data):
         """
         returns a tuple: (frequency domain, Power spectra, abs(power_spectra))
 
@@ -37,7 +41,7 @@ class fft_analysis(object):
         plottable_spectra = (2/N * np.abs(power_spectra))[:N//2]
         return (freq_dom,power_spectra,plottable_spectra)
 
-    def filter(f_low, f_high, freq_dom, power_spectra):
+    def filter(self, f_low, f_high, freq_dom, power_spectra):
         """
         returns power spectra that is cleaned of specific frequencies
 
@@ -56,7 +60,7 @@ class fft_analysis(object):
                 cp[-i] = 0
         return np.copy(cp)
 
-    def fourier_filter(time_series, data, low_f, high_f, TR):
+    def fourier_filter(self, time_series, data, low_f, high_f, TR):
         """
         Driver module: runs fourier_trans() and filter() and downsamples
 
@@ -66,8 +70,8 @@ class fft_analysis(object):
         high_f = upper frequency bound
         TR = repetition time: found in BOLD .json
         """
-        freq, power, disp = fourier_trans(time_series[1], data)
-        pre_invert = filter(low_f,high_f, freq, power)
+        freq, power, disp = self.fourier_trans(time_series[1], data)
+        pre_invert = self.filter(low_f,high_f, freq, power)
         inverted = ifft(pre_invert).real
 
 
@@ -80,7 +84,7 @@ class fft_analysis(object):
         resampler = interp.interp1d(time_series, inverted, fill_value="extrapolate")
         return (resampler(resample_ts))
 
-    def fourier_filter_no_resample(time_series, data, low_f, high_f):
+    def fourier_filter_no_resample(self, time_series, data, low_f, high_f):
         """
         Driver module: runs fourier_trans() and filter() and does not downsample
 
@@ -89,12 +93,12 @@ class fft_analysis(object):
         low_f = lower frequency bound
         high_f = upper frequency bound
         """
-        freq, power, disp = fourier_trans(time_series[1], data)
-        pre_invert = filter(low_f,high_f, freq, power)
+        freq, power, disp = self.fourier_trans(time_series[1], data)
+        pre_invert = self.filter(low_f,high_f, freq, power)
         inverted = ifft(pre_invert).real
         return inverted
 
-    def plotFourier(freq_dom, plottable):
+    def plotFourier(self, freq_dom, plottable):
         """
         self explanatory in name
         """
@@ -390,7 +394,7 @@ class optimizer(object):
         """
         buffer = 0.0
         for s1n, s2n, bn in zip(S1, S2, B):
-            buffer += grad_constant(C1, C2, C3, s1n, s2n, bn) * s1n/len(S1)
+            buffer += self.__grad_constant_GLM(C1, C2, C3, s1n, s2n, bn) * s1n/len(S1)
         return buffer
 
     def __grad_C2_GLM(self, C1, C2, C3, S1, S2, B):
@@ -410,7 +414,7 @@ class optimizer(object):
         """
         buffer = 0.0
         for s1n, s2n, bn in zip(S1, S2, B):
-            buffer += grad_constant(C1, C2, C3, s1n, s2n, bn) * s2n/len(S1)
+            buffer += self.__grad_constant_GLM(C1, C2, C3, s1n, s2n, bn) * s2n/len(S1)
         return buffer
 
     def __grad_C3_GLM(self, C1, C2, C3, S1, S2, B):
@@ -430,7 +434,7 @@ class optimizer(object):
         """
         buffer = 0.0
         for s1n, s2n, bn in zip(S1, S2, B):
-            buffer += grad_constant(C1, C2, C3, s1n, s2n, bn)/len(S1)
+            buffer += self.__grad_constant_GLM(C1, C2, C3, s1n, s2n, bn)/len(S1)
         return buffer
 
     def linear_optimize_GLM(self, S1, S2, B, init_tuple = (0,0,0), descent_speed=.1, lifespan = 100):
