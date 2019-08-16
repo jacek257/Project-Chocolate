@@ -1,6 +1,0 @@
-#!/bin/bash
-
-py_path=/media/labrat/395Mount/Repos/Project-Chocolate/
-script_name=fourier_cleanup.py
-
-python3 $py_path$script_name $@
