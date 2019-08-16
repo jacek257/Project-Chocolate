@@ -295,6 +295,7 @@ class peak_analysis(object):
 
         plt.close()
 
+<<<<<<< HEAD
         CO2_resamp = interp.interp1d(CO2_df.Time, CO2_df.CO2)
         CO2_final = CO2_resamp(np.linspace(0, 480, length))
         O2_resamp = interp.interp1d(O2_df.Time, O2_df.O2)
@@ -315,6 +316,18 @@ class shifter(object):
         super(shifter, self).__init__()
 
     def get_centroid(self, t_series, data_series, window_coeff, poly_order):
+=======
+        return CO2_df.CO2, O2_df.O2
+
+
+class centroid_shift(object):
+    """docstring for centroid_shift.
+        acknowledgements:
+        https://ws680.nist.gov/publication/get_pdf.cfm?pub_id=901379
+    """
+
+    def get_centroid(t_series, data_series, window_coeff, poly_order):
+>>>>>>> 46371a9c39a62e5fc892196efcbe04c052feef3d
         """
         centroid is a signal weighted average of time. We are essentially calculating the temporal middle of the signal
 
@@ -335,7 +348,11 @@ class shifter(object):
         #return square weighted average
         return buffer/(np.sum(data_series**2))
 
+<<<<<<< HEAD
     def align_centroid(self, base_time, base_sig, time1, sig1, time2, sig2): #TODO: arbitrary number of centroids
+=======
+    def align_centroid(base_time, base_sig, time1, sig1, time2, sig2): #TODO: arbitrary number of centroids
+>>>>>>> 46371a9c39a62e5fc892196efcbe04c052feef3d
         """
         aligns several (3) time series based on their relative temporal centroids
 
@@ -352,9 +369,15 @@ class shifter(object):
             (dictionary) {base_time, base_sig, sig1, sig2}
         """
         #get all centroids
+<<<<<<< HEAD
         base_centroid = self.get_centroid(base_time, base_sig)
         sig1_centroid = self.get_centroid(time1, sig1)
         sig2_centroid = self.get_centroid(time2, sig2)
+=======
+        base_centroid = get_centroid(base_time, base_sig)
+        sig1_centroid = get_centroid(time1, sig1)
+        sig2_centroid = get_centroid(time2, sig2)
+>>>>>>> 46371a9c39a62e5fc892196efcbe04c052feef3d
 
         #shift times and construct interpolators
         sig1_resampler = interp.interp1d(time1 - sig1_centroid + base_centroid, sig1)
@@ -366,6 +389,7 @@ class shifter(object):
 
         return {'base_time' : base_time, 'base_sig' : base_sig, 'sig1' : sig1_exact_aligned, 'sig2' : sig2_exact_aligned}
 
+<<<<<<< HEAD
     def get_cross_correlation(self, base, sig):
         """
         Params:
@@ -406,6 +430,8 @@ class shifter(object):
         shifted = resamp(np.linspace(0, 480, len(base_norm)))
 
         return shifted
+=======
+>>>>>>> 46371a9c39a62e5fc892196efcbe04c052feef3d
 
 class optimizer(object):
     """docstring for optimizer."""
