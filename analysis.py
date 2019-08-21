@@ -12,11 +12,8 @@ import os, sys
 import time
 from tqdm import tqdm
 
-class fft_analysis(object):
+class fft_analysis:
     """docstring for fft_analysis."""
-
-    def __init__(self):
-        super(fft_analysis, self).__init__()
 
     def getDataArray(self, f_path):
         df = pd.read_csv(f_path, sep='\t', names=['Time', 'O2', 'CO2', 'thrw', 'away'],
@@ -105,7 +102,7 @@ class fft_analysis(object):
         plt.figure(figsize=(20,10))
         plt.semilogx(x = freq_dom, y = plottable)
 
-class stat_utils(object):
+class stat_utils:
     """docstring for stat_utils."""
 
     def showMe(*plots):
@@ -121,7 +118,14 @@ class stat_utils(object):
             plt.plot(p)
         plt.show()
 
-    def save_plots(df, O2, CO2, f_path, verb, TR):
+    def save_meants(self, meants, peak_prediction, f_path):
+        #generate predicted plot and meants plot
+        plt.plot(np.linspace(0,480, len(meants)), meants, label='meants')
+        plt.plot(np.linspace(0,480, len(meants)), peak_prediction, label='predicted')
+        plt.legend()
+        plt.savefig(f_path[:-4]+'/regression_plot.png')
+
+    def save_plots(self, df, O2, O2_shift, CO2, CO2_shift, meants, f_path, key, verb, TR):
 
         #TODO: add BOLD, centroid, and shifted O2/CO2 graphs
 
@@ -131,6 +135,16 @@ class stat_utils(object):
         Parameters:
             df: dataframe
                 data structure that holds the data
+            O2: array-like
+                O2 data to be graphed
+            O2_shift: array-like
+                time-shifted O2 data to be graphed
+            CO2: array-like
+                CO2 data to be graphed
+            CO2_shift: array-like
+                time-shifted CO2 data to be graphed
+            meants: array-like
+                meants of BOLD data
             verb: boolean
                 flag for verbose output
             f_path: string
@@ -145,26 +159,56 @@ class stat_utils(object):
         """
 
         # set the size of the graphs
-        sns.set(rc={'figure.figsize':(20,10)})
+        sns.set(rc={'figure.figsize':(60,20)})
 
         #construct interpolation time_step series
-        resample_ts = np.arange(0,510,TR)
+        resample_ts = np.arange(0,480,TR)
 
+        # normalize data
+        meants_norm = meants - meants.mean()
+        meants_norm /= meants_norm.std()
+
+        CO2_norm = CO2 - CO2.mean()
+        CO2_norm /= CO2.std()
+
+        CO2_shift_norm = CO2_shift - CO2_shift.mean()
+        CO2_shift_norm /= CO2_shift_norm.std()
+
+        O2_norm = O2 - O2.mean()
+        O2_norm /= O2.std()
+
+        O2_shift_norm = O2_shift - O2_shift.mean()
+        O2_shift_norm /= O2_shift_norm.std()
+
+
+        if verb:
+            print('Creating plots to be saved')
         # create subplots for png file later
         f, axes = plt.subplots(2, 3)
 
-        # recreate the plot because plt.show clears plt
         sns.lineplot(x='Time', y='O2', data=df, linewidth=1, color='b', ax=axes[0, 0])
         sns.lineplot(x=resample_ts, y=O2, linewidth=2, color='g', ax=axes[0, 0])
-        # recreate the plot because plt.show clears plt
+
         sns.lineplot(x='Time', y='CO2', data=df, linewidth=1, color='b', ax=axes[1, 0])
         sns.lineplot(x=resample_ts, y=CO2, linewidth=2, color='r', ax=axes[1, 0])
+
+        sns.lineplot(x=resample_ts, y=meants_norm, color='b', ax=axes[0,1])
+        sns.lineplot(x=resample_ts, y=O2_norm, color='g', ax=axes[0,1])
+
+        sns.lineplot(x=resample_ts, y=meants_norm, color='b', ax=axes[1,1])
+        sns.lineplot(x=resample_ts, y=CO2_norm, color='r', ax=axes[1,1])
+
+        sns.lineplot(x=resample_ts, y=meants_norm, color='b', ax=axes[0,2])
+        sns.lineplot(x=resample_ts, y=O2_shift_norm, color='g', ax=axes[0,2])
+
+        sns.lineplot(x=resample_ts, y=meants_norm, color='b', ax=axes[1,2])
+        sns.lineplot(x=resample_ts, y=CO2_shift_norm, color='r', ax=axes[1,2])
 
         # save the plot
         if verb:
             print('Saving plots for', f_path)
 
-        save_path = save_path = f_path[:-4]+'/graph.png'
+        save_path = save_path = f_path[:-4]+'/' + key + 'graph.png'
         f.savefig(save_path)
         if verb:
             print('Saving complete')
@@ -173,7 +217,7 @@ class stat_utils(object):
         if verb:
             print()
 
-    def get_r2(sig_fit, sig_obs):
+    def get_r2(self, sig_fit, sig_obs):
         """
         gets r^2 (coefficient of determination) of sig_fit w.r.t. sig_obs
 
@@ -191,14 +235,14 @@ class stat_utils(object):
             print("Signals have different lengths: ", len(sig_fit) , ' &', len(sig_obs))
         else:
             sig_obs_var = np.mean(sig_obs)
-            return 1-np.sum((sig_fit-sig_obs)**2)/np.sum((sig_fit-sig_obs_var)**2)
+            return 1-np.sum((sig_fit-sig_obs)**2)/np.sum((sig_obs-sig_obs_var)**2)
 
 
 
-class peak_analysis(object):
+class peak_analysis:
     """docstring for peak_analysis."""
 
-    def get_peaks(df, length, verb, file, TR):
+    def get_peaks(df, length, verb, file, TR, trough=False):
         """
         Get the peaks and troughs of CO2 and O2
 
@@ -213,6 +257,8 @@ class peak_analysis(object):
                 file name to be displayed during verbose output
             TR: float
                 repetition time, found in BOLD.json
+            trough: boolean
+                get the troughs of CO2 data
 
         Returns:
             et_O2: array-like
@@ -233,7 +279,7 @@ class peak_analysis(object):
         prom = 1
         while bad:
             # get the troughs of the O2 data
-            low_O2, _ = sg.find_peaks(df.O2.apply(lambda x:x*-1), prominence=prom)
+            O2_data, _ = sg.find_peaks(df.O2.apply(lambda x:x*-1), prominence=prom)
 
             # create scatterplot of all O2 data
             if verb:
@@ -241,7 +287,7 @@ class peak_analysis(object):
             sns.lineplot(x='Time', y='O2', data=df, linewidth=1, color='b')
 
             # get the data points of peak
-            O2_df = df.iloc[low_O2]
+            O2_df = df.iloc[O2_data]
 
             # add peak overlay onto the scatterplot
             sns.lineplot(x='Time', y='O2', data=O2_df, linewidth=2, color='g')
@@ -265,8 +311,11 @@ class peak_analysis(object):
         bad = True
         prom = 1
         while bad:
-            # get peaks of the CO2 data
-            high_CO2, _ = sg.find_peaks(df.CO2, prominence=prom)
+            # get the troughs of the O2 data
+            if trough:
+                CO2_data, _ = sg.find_peaks(df.CO2.apply(lambda x:x*-1), prominence=prom)
+            else:
+                CO2_data, _ = sg.find_peaks(df.CO2, prominence=prom)
 
             # create scatter of all CO2 data
             if verb:
@@ -274,7 +323,7 @@ class peak_analysis(object):
             sns.lineplot(x='Time', y='CO2', data=df, linewidth=1, color='b')
 
             # get the data points of peak
-            CO2_df = df.iloc[high_CO2]
+            CO2_df = df.iloc[CO2_data]
 
             # add peak overlay onto the scatterplot
             sns.lineplot(x='Time', y='CO2', data=CO2_df, linewidth=2, color='r')
@@ -295,16 +344,15 @@ class peak_analysis(object):
 
         plt.close()
 
-<<<<<<< HEAD
-        CO2_resamp = interp.interp1d(CO2_df.Time, CO2_df.CO2)
+        CO2_resamp = interp.interp1d(CO2_df.Time, CO2_df.CO2, fill_value='extrapolate')
         CO2_final = CO2_resamp(np.linspace(0, 480, length))
-        O2_resamp = interp.interp1d(O2_df.Time, O2_df.O2)
-        O2_final = O2_resamp(np.linspace(0, 480, lenght))
+        O2_resamp = interp.interp1d(O2_df.Time, O2_df.O2, fill_value='extrapolate')
+        O2_final = O2_resamp(np.linspace(0, 480, length))
 
         return CO2_final, O2_final
 
-        
-class shifter(object):
+
+class shifter:
     """
     docstring for shifter.
     acknowledgements:
@@ -312,22 +360,8 @@ class shifter(object):
 
     Prefer to use cross-correlaton over centroid
     """
-    def __init__(self):
-        super(shifter, self).__init__()
 
     def get_centroid(self, t_series, data_series, window_coeff, poly_order):
-=======
-        return CO2_df.CO2, O2_df.O2
-
-
-class centroid_shift(object):
-    """docstring for centroid_shift.
-        acknowledgements:
-        https://ws680.nist.gov/publication/get_pdf.cfm?pub_id=901379
-    """
-
-    def get_centroid(t_series, data_series, window_coeff, poly_order):
->>>>>>> 46371a9c39a62e5fc892196efcbe04c052feef3d
         """
         centroid is a signal weighted average of time. We are essentially calculating the temporal middle of the signal
 
@@ -348,11 +382,7 @@ class centroid_shift(object):
         #return square weighted average
         return buffer/(np.sum(data_series**2))
 
-<<<<<<< HEAD
     def align_centroid(self, base_time, base_sig, time1, sig1, time2, sig2): #TODO: arbitrary number of centroids
-=======
-    def align_centroid(base_time, base_sig, time1, sig1, time2, sig2): #TODO: arbitrary number of centroids
->>>>>>> 46371a9c39a62e5fc892196efcbe04c052feef3d
         """
         aligns several (3) time series based on their relative temporal centroids
 
@@ -369,15 +399,9 @@ class centroid_shift(object):
             (dictionary) {base_time, base_sig, sig1, sig2}
         """
         #get all centroids
-<<<<<<< HEAD
         base_centroid = self.get_centroid(base_time, base_sig)
         sig1_centroid = self.get_centroid(time1, sig1)
         sig2_centroid = self.get_centroid(time2, sig2)
-=======
-        base_centroid = get_centroid(base_time, base_sig)
-        sig1_centroid = get_centroid(time1, sig1)
-        sig2_centroid = get_centroid(time2, sig2)
->>>>>>> 46371a9c39a62e5fc892196efcbe04c052feef3d
 
         #shift times and construct interpolators
         sig1_resampler = interp.interp1d(time1 - sig1_centroid + base_centroid, sig1)
@@ -389,7 +413,6 @@ class centroid_shift(object):
 
         return {'base_time' : base_time, 'base_sig' : base_sig, 'sig1' : sig1_exact_aligned, 'sig2' : sig2_exact_aligned}
 
-<<<<<<< HEAD
     def get_cross_correlation(self, base, sig):
         """
         Params:
@@ -426,18 +449,13 @@ class centroid_shift(object):
         #get shifts
         shift = self.get_cross_correlation(base_norm, other_norm)
         #construct resampler
-        resamp = interp.interp1d(np.linespace(0,480, len(base_norm))+shift, other, fill_value='extrapolate')
+        resamp = interp.interp1d(np.linspace(0,480, len(base_norm))+shift, other, fill_value='extrapolate')
         shifted = resamp(np.linspace(0, 480, len(base_norm)))
 
         return shifted
-=======
->>>>>>> 46371a9c39a62e5fc892196efcbe04c052feef3d
 
-class optimizer(object):
+class optimizer:
     """docstring for optimizer."""
-
-    def __init__(self):
-        super(optimizer, self).__init__()
 
     def __grad_constant_GLM(self, c1,c2,c3,s1n, s2n, bn):
         """
