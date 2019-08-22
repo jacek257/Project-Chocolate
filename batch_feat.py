@@ -12,6 +12,7 @@ import analysis
 import json
 import matplotlib.pyplot as  plt
 from sklearn import metrics
+from scipy import signal
 
 # instantiate the argument parser
 parser = argparse.ArgumentParser()
@@ -189,171 +190,200 @@ p_df = p_df.reset_index(drop=True)
 
 ####run EndTidal Cleaning and return paths
 
-#r2
+r2_dic = {'ID' : [], 'type' : [], 'r2' : []}
 
-for type in ['four', 'peak', 'trough']:
-    if type == 'four':
-        four = True
-        trough = False
-    elif type == 'trough':
-        four = False
-        trough = True
+#for smoothing in ['none', 'pre', 'post']:
+for smoothing in ['none', 'pre']:
+    if smoothing == 'pre':
+        pre = True
+        post = False
+        sm = 'pre_'
+    # elif smoothing == 'post':
+    #     pre = False
+    #     post = True
+    #     sm = "post_"
     else:
-        four = False
-        trough = False
+        pre = False
+        post = False
+        sm = "no_"
 
-    #generate cleaned data header
-    key = ''
-    if four:
-        key = 'f_'
-    elif trough:
-        key = 't_'
-    else:
-        key = 'p_'
-
-    ET_dict = {'ETO2' : [], 'ETCO2' : [], 'ET_exists' : [], 'ID2' : []}
-
-    if verb:
-        print('Start processing each patient')
-    for f_path, dim, id, b_path, p_path, meants_path in zip(p_df.EndTidal_Path, p_df.Dimension, p_df.ID, p_df.BOLD_corrected_path, p_df.Processed_path, p_df.meants_path):
-        if not os.path.exists(f_path[:-4]):
-            os.mkdir(f_path[:-4])
-
-        ##path made and stored in p_df.Processed_path
-        ##pre-running slicetimer and mcflirt (motion correction) as we create bold paths
-
-        #perfrom cleaning and load into p_df
-        #load data into DataFrame
-        ET_dict['ID2'].append(id)
-        endTidal = pd.read_csv(f_path, sep='\t|,', names=['Time', 'O2', 'CO2', 'thrw', 'away'], usecols=['Time', 'O2', 'CO2'], index_col=False, engine='python')
-        #drop rows with missing cols
-        endTidal = endTidal.dropna()
-
-        meants = np.loadtxt(meants_path, delimiter='\n')[3:]
-
-        #skip if DataFrame is empty
-        if endTidal.empty:
-            os.rmdir(f_path[:-4])
-            ET_dict['ETO2'].append('')
-            ET_dict['ETCO2'].append('')
-            ET_dict['ET_exists'].append(False)
-            print("patient: ", id, " is has empty end-tidal")
-            continue
-
-        #generate cleaned data paths
-        save_O2 = f_path[:-4]+'/'+key+'O2_contrast.txt'
-        save_CO2 = f_path[:-4]+'/'+key+'CO2_contrast.txt'
-
-        #check if the save_files already exist
-        if(os.path.exists(save_O2) and os.path.exists(save_CO2) and over):
-            if(verb):
-                print('\tID: ',id," \tProcessed gas files already exist")
-            ET_dict['ETO2'].append(save_O2)
-            ET_dict['ETCO2'].append(save_CO2)
-            ET_dict['ET_exists'].append(True)
-            continue
-
-        # need to scale CO2 data is necessary
-        if endTidal.CO2.max() < 1:
-            endTidal.CO2 = endTidal.CO2 * 100
-
-        interp_time = 480/(dim-3)
-
-        if four:
-            if verb:
-                print('Starting fourier for', id)
-            #get fourier cleaned data
-            pre_O2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.O2, 3, 35, interp_time)
-            pre_CO2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.CO2, 3, 35, interp_time)
-            processed_O2 = analysis.shifter().corr_align(meants, pre_O2)
-            processed_CO2 = analysis.shifter().corr_align(meants, pre_CO2)
+    for type in ['four', 'peak', 'trough']:
+        if type == 'four':
+            four = True
+            trough = False
+        elif type == 'trough':
+            four = False
+            trough = True
         else:
-            #get peak data
-            pre_CO2, pre_O2 = analysis.peak_analysis.get_peaks(endTidal, len(meants), verb, f_path, interp_time, trough)
+            four = False
+            trough = False
 
-            # get shifted O2 and CO2
-            processed_CO2 = analysis.shifter().corr_align(meants, pre_CO2)
-            processed_O2 = analysis.shifter().corr_align(meants, pre_O2)
+        #generate cleaned data header
+        if four:
+            key = sm+'f_'
+        elif trough:
+            key = sm+'t_'
+        else:
+            key = sm+'p_'
+
+        ET_dict = {'ETO2' : [], 'ETCO2' : [], 'ET_exists' : [], 'ID2' : []}
+
+        if verb:
+            print('Start processing each patient')
+        for f_path, dim, id, b_path, p_path, meants_path in zip(p_df.EndTidal_Path, p_df.Dimension, p_df.ID, p_df.BOLD_corrected_path, p_df.Processed_path, p_df.meants_path):
+            if not os.path.exists(f_path[:-4]):
+                os.mkdir(f_path[:-4])
+
+            ##path made and stored in p_df.Processed_path
+            ##pre-running slicetimer and mcflirt (motion correction) as we create bold paths
+
+            #perfrom cleaning and load into p_df
+            #load data into DataFrame
+            ET_dict['ID2'].append(id)
+            endTidal = pd.read_csv(f_path, sep='\t|,', names=['Time', 'O2', 'CO2', 'thrw', 'away'], usecols=['Time', 'O2', 'CO2'], index_col=False, engine='python')
+            #drop rows with missing cols
+            endTidal = endTidal.dropna()
+
+            meants = np.loadtxt(meants_path, delimiter='\n')[3:]
+
+            #skip if DataFrame is empty
+            if endTidal.empty:
+                os.rmdir(f_path[:-4])
+                ET_dict['ETO2'].append('')
+                ET_dict['ETCO2'].append('')
+                ET_dict['ET_exists'].append(False)
+                print("patient: ", id, " is has empty end-tidal")
+                continue
+
+            #generate cleaned data paths
+            save_O2 = f_path[:-4]+'/'+key+'O2_contrast.txt'
+            save_CO2 = f_path[:-4]+'/'+key+'CO2_contrast.txt'
+
+            #check if the save_files already exist
+            if(os.path.exists(save_O2) and os.path.exists(save_CO2) and over):
+                if(verb):
+                    print('\tID: ',id," \tProcessed gas files already exist")
+                ET_dict['ETO2'].append(save_O2)
+                ET_dict['ETCO2'].append(save_CO2)
+                ET_dict['ET_exists'].append(True)
+                processed_O2 = np.loadtxt(save_O2)
+                processed_CO2 = np.loadtxt(save_CO2)
+
+            else:
+                # need to scale CO2 data is necessary
+                if endTidal.CO2.max() < 1:
+                    endTidal.CO2 = endTidal.CO2 * 100
+
+                if pre:
+                    endTidal.CO2 = signal.savgol_filter(endTidal.CO2, 35, 3)
+
+                interp_time = 480/(dim-3)
+
+                if four:
+                    if verb:
+                        print('Starting fourier for', id)
+                    #get fourier cleaned data
+                    pre_O2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.O2, 3, 35, interp_time)
+                    pre_CO2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.CO2, 3, 35, interp_time)
+                    processed_O2 = analysis.shifter().corr_align(meants, pre_O2)
+                    processed_CO2 = analysis.shifter().corr_align(meants, pre_CO2)
+                else:
+                    #get peak data
+                    pre_CO2, pre_O2 = analysis.peak_analysis.get_peaks(endTidal, len(meants), verb, f_path, interp_time, trough)
+
+                    # get shifted O2 and CO2
+                    processed_CO2 = analysis.shifter().corr_align(meants, pre_CO2)
+                    processed_O2 = analysis.shifter().corr_align(meants, pre_O2)
+
+                    # if post:
+                        # low-pass filter on end-tidal peaks
+
+                #storing cleaned data paths
+                ET_dict['ETO2'].append(save_O2)
+                ET_dict['ETCO2'].append(save_CO2)
+                ET_dict['ET_exists'].append(True)
+
+                #save data
+                np.savetxt(save_O2, processed_O2, delimiter='\t')
+                np.savetxt(save_CO2, processed_CO2, delimiter='\t')
+
+                # save and create plots (shifts)
+                analysis.stat_utils().save_plots(df=endTidal, O2=pre_O2, O2_shift=processed_O2, CO2=pre_CO2, CO2_shift=processed_CO2, meants=meants, f_path=f_path, key=key, verb=verb, TR=interp_time)
+
+            #fit to linear model
+            coeffs = analysis.optimizer().stochastic_optimize_GLM(processed_O2, processed_CO2, meants, lifespan=1000)
+
+            #generate prediction
+            peak_prediction = coeffs[0]*processed_O2 + coeffs[1]*processed_CO2 +coeffs[2]
+
+            #get r^2
+            regress_score = metrics.r2_score(meants, peak_prediction)
+            print("Regression score for:",id,' is ', regress_score)
+            r2_dic['ID'].append(id)
+            r2_dic['type'].append(key)
+            r2_dic['r2'].append(regress_score)
+
+            # save and create plots (regression)
+            plt.figure(figsize=(20,10))
+            plt.plot(meants)
+            plt.plot(peak_prediction)
+            plt.savefig(f_path[:-4]+'/'+key+'regression_plot.png')
+            plt.clf()
+            plt.close()
+
+        if verb:
+            print('Finished processing each patient')
 
 
-        #fit to linear model
-        coeffs = analysis.optimizer().stochastic_optimize_GLM(processed_O2, processed_CO2, meants, lifespan=1000)
+        #construct new DataFrame
+        et_frame = pd.DataFrame(ET_dict)
 
-        #generate prediction
-        peak_prediction = coeffs[0]*processed_O2 + coeffs[1]*processed_CO2 +coeffs[2]
+        #concat and rop bad dataframes
+        p_df = pd.concat((p_df, pd.DataFrame(ET_dict)), axis=1)
+        p_df = p_df[p_df.ET_exists != False].drop('ET_exists', axis = 1)
 
-        #get r^2
-        print("Regression score for:",id,' is ', metrics.r2_score(meants, peak_prediction))
+        #reset indeces
+        p_df = p_df.reset_index(drop=True)
 
-        #generate cleaned data paths
-        save_O2 = f_path[:-4]+'/'+key+'O2_contrast.txt'
-        save_CO2 = f_path[:-4]+'/'+key+'CO2_contrast.txt'
+        #print(p_df.head())
 
-        #storing cleaned data paths
-        ET_dict['ETO2'].append(save_O2)
-        ET_dict['ETCO2'].append(save_CO2)
-        ET_dict['ET_exists'].append(True)
+        # if verb:
+        #     print('Starting to run feat')
+        # #run Feat
+        # #check for (and make) feat directory
+        # if not os.path.exists(feat_dir):
+        #     os.mkdir(feat_dir)
+        #
+        # #make design file directory
+        # if not os.path.exists(feat_dir+'design_files/'):
+        #     os.mkdir(feat_dir+'design_files/')
+        #
+        # #load design template
+        # with open(feat_dir+'design_files/template', 'r') as template:
+        #     stringTemp = template.read()
+        #     for i in range(len(p_df)):
+        #         output_dir = feat_dir+p_df.Cohort[i]+p_df.ID[i]
+        #         # if not os.path.exists(output_dir):
+        #         #     os.mkdir(output_dir)
+        #         to_write = stringTemp[:]
+        #         # print(to_write)
+        #         to_write = to_write.replace("%%OUTPUT_DIR%%",'"'+output_dir+'"')
+        #         to_write = to_write.replace("%%VOLUMES%%",'"'+str(p_df.Dimension[i])+'"')
+        #         to_write = to_write.replace("%%TR%%",'"'+str(p_df.TR[i])+'"')
+        #         to_write = to_write.replace("%%BOLD_FILE%%",'"'+p_df.BOLD_path[i]+'"')
+        #         to_write = to_write.replace("%%FS_T1%%",'"'+p_df.T1_path[i]+'"')
+        #         to_write = to_write.replace("%%O2_CONTRAST%%",'"'+p_df.ETO2[i]+'"')
+        #         to_write = to_write.replace("%%CO2_CONTRAST%%",'"'+p_df.ETCO2[i]+'"')
+        #
+        #         with open(feat_dir+'design_files/'+p_df.ID[i]+'.fsf', 'w+') as outFile:
+        #             outFile.write(to_write)
+        #
+        #         os.spawnlp(os.P_NOWAIT, 'feat', 'feat', feat_dir+'design_files/'+key+p_df.ID[i]+'.fsf', '&')
+                # print('written')
 
-        #save data
-        np.savetxt(save_O2, processed_O2, delimiter='\t')
-        np.savetxt(save_CO2, processed_CO2, delimiter='\t')
-
-        # save and create plots
-        analysis.stat_utils().save_plots(df=endTidal, O2=pre_O2, O2_shift=processed_O2, CO2=pre_CO2, CO2_shift=processed_CO2, meants=meants, f_path=f_path, key=key, verb=verb, TR=interp_time)
-        plt.figure(figsize=(20,10))
-        plt.plot(meants)
-        plt.plot(peak_prediction)
-        plt.savefig(f_path[:-4]+'/'+key+'regression_plot.png')
-        plt.clf()
-        plt.close()
-    if verb:
-        print('Finished processing each patient')
-    #construct new DataFrame
-    et_frame = pd.DataFrame(ET_dict)
-
-    #concat and rop bad dataframes
-    p_df = pd.concat((p_df, pd.DataFrame(ET_dict)), axis=1)
-    p_df = p_df[p_df.ET_exists != False].drop('ET_exists', axis = 1)
-
-    #reset indeces
-    p_df = p_df.reset_index(drop=True)
-
-    #print(p_df.head())
-
-    # if verb:
-    #     print('Starting to run feat')
-    # #run Feat
-    # #check for (and make) feat directory
-    # if not os.path.exists(feat_dir):
-    #     os.mkdir(feat_dir)
-    #
-    # #make design file directory
-    # if not os.path.exists(feat_dir+'design_files/'):
-    #     os.mkdir(feat_dir+'design_files/')
-    #
-    # #load design template
-    # with open(feat_dir+'design_files/template', 'r') as template:
-    #     stringTemp = template.read()
-    #     for i in range(len(p_df)):
-    #         output_dir = feat_dir+p_df.Cohort[i]+p_df.ID[i]
-    #         # if not os.path.exists(output_dir):
-    #         #     os.mkdir(output_dir)
-    #         to_write = stringTemp[:]
-    #         # print(to_write)
-    #         to_write = to_write.replace("%%OUTPUT_DIR%%",'"'+output_dir+'"')
-    #         to_write = to_write.replace("%%VOLUMES%%",'"'+str(p_df.Dimension[i])+'"')
-    #         to_write = to_write.replace("%%TR%%",'"'+str(p_df.TR[i])+'"')
-    #         to_write = to_write.replace("%%BOLD_FILE%%",'"'+p_df.BOLD_path[i]+'"')
-    #         to_write = to_write.replace("%%FS_T1%%",'"'+p_df.T1_path[i]+'"')
-    #         to_write = to_write.replace("%%O2_CONTRAST%%",'"'+p_df.ETO2[i]+'"')
-    #         to_write = to_write.replace("%%CO2_CONTRAST%%",'"'+p_df.ETCO2[i]+'"')
-    #
-    #         with open(feat_dir+'design_files/'+p_df.ID[i]+'.fsf', 'w+') as outFile:
-    #             outFile.write(to_write)
-    #
-    #         os.spawnlp(os.P_NOWAIT, 'feat', 'feat', feat_dir+'design_files/'+key+p_df.ID[i]+'.fsf', '&')
-            # print('written')
-
+if any([r2_dic[key] for key in r2_dic]):
+    r2 = pd.DataFrame(r2_dic)
+    r2.to_csv(path+'r2_data.csv', sep='\t', index=False)
 
 if verb:
     print('============== Script Finished ==============')

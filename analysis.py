@@ -276,7 +276,7 @@ class peak_analysis:
 
         # make a loop for user confirmation that O2 peak detection is good
         bad = True
-        prom = 1
+        prom = 2
         while bad:
             # get the troughs of the O2 data
             O2_data, _ = sg.find_peaks(df.O2.apply(lambda x:x*-1), prominence=prom)
@@ -301,15 +301,15 @@ class peak_analysis:
                 print("The following variables can be changed: ")
                 print("    1. prominence - Required prominence of peaks. Type: int")
                 try:
-                    prom = int(input("New prominence (Default is 1): "))
+                    prom = int(input("New prominence (Default is 2): "))
                 except:
                     print("Default value used")
-                    prom = 1
+                    prom = 2
 
 
         # make another loop for user confirmation that CO2 peak detection is good
         bad = True
-        prom = 1
+        prom = 3
         while bad:
             # get the troughs of the O2 data
             if trough:
@@ -337,10 +337,10 @@ class peak_analysis:
                 print("The following variables can be changed: ")
                 print("    1. prominence - Required prominence of peaks. Type: int")
                 try:
-                    prom = int(input("New prominence (Default is 1): "))
+                    prom = int(input("New prominence (Default is 3): "))
                 except:
                     print("Default value used")
-                    prom = 1
+                    prom = 3
 
         plt.close()
 
@@ -422,7 +422,10 @@ class shifter:
         Returns:
             (float) : shift value of signal
         """
+        limit = int(10 * len(base)/480)
         correlation_series = sg.correlate(base, sig)
+        correlation_series = correlation_series[len(correlation_series)//2 - limit:len(correlation_series)//2 + limit]
+
         shift_index = np.argmax(correlation_series) - (len(correlation_series)//2)
         shift_value = 480/len(base) * shift_index
         return shift_value
