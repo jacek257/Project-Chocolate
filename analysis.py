@@ -72,10 +72,10 @@ class fft_analysis:
         inverted = ifft(pre_invert).real
 
 
-        if(time_series[len(time_series)-1]<10):
-            time_series = time_series*60
-        else:
-            time_series = time_series
+        # if(time_series[len(time_series)-1]<10):
+        #     time_series = time_series*60
+        # else:
+        #     time_series = time_series
 
         resample_ts = np.arange(0,480,TR)
         resampler = interp.interp1d(time_series, inverted, fill_value="extrapolate")
@@ -126,9 +126,6 @@ class stat_utils:
         plt.savefig(f_path[:-4]+'/regression_plot.png')
 
     def save_plots(self, df, O2, O2_shift, CO2, CO2_shift, meants, f_path, key, verb, TR):
-
-        #TODO: add BOLD, centroid, and shifted O2/CO2 graphs
-
         """
         Create and saves plots for CO2 and O2 data
 
@@ -145,10 +142,12 @@ class stat_utils:
                 time-shifted CO2 data to be graphed
             meants: array-like
                 meants of BOLD data
-            verb: boolean
-                flag for verbose output
             f_path: string
                 the path of the file
+            key: string
+                the key for the type of type of analysis
+            verb: boolean
+                flag for verbose output
             verb: boolean
                 flag for verbose output
             TR: float
@@ -212,6 +211,7 @@ class stat_utils:
         f.savefig(save_path)
         if verb:
             print('Saving complete')
+        plt.show()
         f.clf()
 
         if verb:
@@ -242,7 +242,7 @@ class stat_utils:
 class peak_analysis:
     """docstring for peak_analysis."""
 
-    def get_peaks(df, length, verb, file, TR, trough=False):
+    def get_peaks(self, df, length, verb, file, TR, trough=False):
         """
         Get the peaks and troughs of CO2 and O2
 
@@ -269,10 +269,6 @@ class peak_analysis:
 
         # set the size of the graphs
         sns.set(rc={'figure.figsize':(20,10)})
-
-        #convert time series to seconds
-        if(df.Time[len(df)-1]<10):
-            df.Time = df.Time*60
 
         # make a loop for user confirmation that O2 peak detection is good
         bad = True
@@ -351,6 +347,60 @@ class peak_analysis:
 
         return CO2_final, O2_final
 
+    def get_wlen(self, sig_time, sig):
+
+        freq,_,power = fft_analysis().fourier_trans(sig_time[1], sig)
+        window_it = np.argmax(power[25:500])+25
+        freq_val = freq[window_it] # this is the most prominent frequency
+        window_mag = 1/freq_val
+
+        window_length = 0
+        for i, t in enumerate(sig_time):
+            if t > window_mag:
+                window_length = i-1
+                break
+
+        return window_length
+
+
+    def block_signal(self, base, sig_time, sig):
+        """
+        Params:
+            base (iterable) = base/reference signal
+            sigtime (iterable) = the sampling time points of sig
+            sig (iterable) = signal to perform peakfinding and resampling on
+
+        Return: (iterable)
+            Peak found time-series which aligns with base_timeit
+        """
+        cpy = sig
+        cpy = cpy.reset_index(drop=True)
+        count = 0
+
+        window_length = self.get_wlen(sig_time, cpy)
+
+        print('wlen:', window_length)
+
+        for i in range(0,len(cpy),window_length):
+            for j in range(i, i+window_length):
+                if j < len(cpy):
+                    cpy[j] = cpy[cpy[i:i+window_length].idxmax()]
+            count += 1
+
+        # get the sampling freq
+        fs = len(sig)/np.max(sig_time)
+        # get cutoff freq
+        fc = count / np.max(sig_time)
+        w = fc / (fs / 2)
+
+        b, a = sg.butter(4, w, 'low', analog=False)
+        filtered = sg.filtfilt(b, a, cpy)
+
+        # return filtered
+        signal_resampler = interp.interp1d(sig_time, filtered, fill_value='extrapolate')
+        signal_resampled = signal_resampler(np.linspace(0, 480, len(base)))
+
+        return signal_resampled
 
 class shifter:
     """
@@ -536,7 +586,7 @@ class optimizer:
             buffer += self.__grad_constant_GLM(C1, C2, C3, s1n, s2n, bn)/len(S1)
         return buffer
 
-    def linear_optimize_GLM(self, S1, S2, B, init_tuple = (0,0,0), descent_speed=.1, lifespan = 100):
+    def linear_optimize_GLM(self, S1, S2, B, init_tuple = (0,0,0), descent_speed=.1, lifespan = 10000):
         """
         linear coefficient optimizer by gradient descent
 

@@ -13,6 +13,8 @@ import json
 import matplotlib.pyplot as  plt
 from sklearn import metrics
 from scipy import signal
+import sys
+import time
 
 # instantiate the argument parser
 parser = argparse.ArgumentParser()
@@ -23,8 +25,10 @@ parser.add_argument("path", help="path of the folder that contains all the endti
 # add optional arguments
 parser.add_argument("-v", "--verbose", action='store_true', help="incrase output verbosity")
 parser.add_argument("-f", "--fouier", action='store_true', help='switch analysis to fouier instead of default peak_find')
+parser.add_argument("-b", "--block", action='store_true', help='switch analysis to block envelope')
 parser.add_argument("-t", "--CO2_trough", action='store_true', help='switch CO2 peak finding to troughs')
 parser.add_argument("-o", "--overwrite", action='store_true', help='overwrite existing processed gas data')
+parser.add_argument("-r", "--no_r2", action='store_true', help='do not calculate r2 score')
 
 
 #get the positional arguments
@@ -34,7 +38,14 @@ path = args.path
 verb = (True if args.verbose else False)
 four = True if args.fouier else False
 trough = True if args.CO2_trough else False
-over = False if args.overwrite else True
+over = True if args.overwrite else False
+block = True if args.block else False
+no_r2 = True if args.no_r2 else False
+
+# limit the number of process that can be ran at the same time
+pro = [None] * 10
+# create a queue for featquery
+fq = []
 
 ###########set directories (TODO, automate)
 home_dir = '/media/ke/8tb_part2/FSL_work/'
@@ -42,6 +53,7 @@ nifti_dir = '/media/ke/8tb_part2/FSL_work/SH_info/'
 processed_dir = '/media/ke/8tb_part2/FSL_work/SH_info/BOLD_processed'
 freesurfer_t1_dir = '/media/ke/8tb_part2/FSL_work/SH_FST1/'
 feat_dir = '/media/ke/8tb_part2/FSL_work/feat/'
+# graphs_dir = '/media/ke/8tb_part2/FSL_work/graphs/'
 
 
 # make sure the path ends with '/'
@@ -193,44 +205,52 @@ p_df = p_df.reset_index(drop=True)
 r2_dic = {'ID' : [], 'type' : [], 'r2' : []}
 
 #for smoothing in ['none', 'pre', 'post']:
-for smoothing in ['none', 'pre']:
+for smoothing in ['no', 'pre']:
     if smoothing == 'pre':
         pre = True
         post = False
         sm = 'pre_'
-    # elif smoothing == 'post':
-    #     pre = False
-    #     post = True
-    #     sm = "post_"
     else:
         pre = False
         post = False
         sm = "no_"
-
-    for type in ['four', 'peak', 'trough']:
-        if type == 'four':
+    # typ = 'block'
+    # if typ:
+    for typ in ['four', 'peak', 'trough', 'block']:
+#    for typ in ['four', 'peak', 'trough']:
+        if typ == 'four':
             four = True
             trough = False
-        elif type == 'trough':
+            block = False
+        elif typ == 'trough':
             four = False
             trough = True
+            block = False
+        elif typ == 'block':
+            four = False
+            trough = False
+            block = True
         else:
             four = False
             trough = False
+            block = False
 
         #generate cleaned data header
         if four:
             key = sm+'f_'
         elif trough:
             key = sm+'t_'
+        elif block:
+            key = sm+'b_'
         else:
             key = sm+'p_'
 
         ET_dict = {'ETO2' : [], 'ETCO2' : [], 'ET_exists' : [], 'ID2' : []}
 
         if verb:
-            print('Start processing each patient')
-        for f_path, dim, id, b_path, p_path, meants_path in zip(p_df.EndTidal_Path, p_df.Dimension, p_df.ID, p_df.BOLD_corrected_path, p_df.Processed_path, p_df.meants_path):
+            print('Start processing each patient with', smoothing, 'smoothing and ', typ)
+        for f_path, dim, id, b_path, p_path, meants_path in zip(p_df.EndTidal_Path, p_df.Dimension, p_df.ID, p_df.BOLD_corrected_path,
+                                                                p_df.Processed_path, p_df.meants_path):
             if not os.path.exists(f_path[:-4]):
                 os.mkdir(f_path[:-4])
 
@@ -244,7 +264,9 @@ for smoothing in ['none', 'pre']:
             #drop rows with missing cols
             endTidal = endTidal.dropna()
 
-            meants = np.loadtxt(meants_path, delimiter='\n')[3:]
+            meants = np.loadtxt(meants_path, delimiter='\n')
+            meants_ts = np.linspace(0,480, len(meants))[3:]
+            meants = meants[3:]
 
             #skip if DataFrame is empty
             if endTidal.empty:
@@ -260,7 +282,7 @@ for smoothing in ['none', 'pre']:
             save_CO2 = f_path[:-4]+'/'+key+'CO2_contrast.txt'
 
             #check if the save_files already exist
-            if(os.path.exists(save_O2) and os.path.exists(save_CO2) and over):
+            if(os.path.exists(save_O2) and os.path.exists(save_CO2) and not over):
                 if(verb):
                     print('\tID: ',id," \tProcessed gas files already exist")
                 ET_dict['ETO2'].append(save_O2)
@@ -274,6 +296,9 @@ for smoothing in ['none', 'pre']:
                 if endTidal.CO2.max() < 1:
                     endTidal.CO2 = endTidal.CO2 * 100
 
+                if endTidal.Time.max() < 10:
+                    endTidal.Time = endTidal.Time * 60
+
                 if pre:
                     endTidal.CO2 = signal.savgol_filter(endTidal.CO2, 35, 3)
 
@@ -285,18 +310,22 @@ for smoothing in ['none', 'pre']:
                     #get fourier cleaned data
                     pre_O2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.O2, 3, 35, interp_time)
                     pre_CO2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.CO2, 3, 35, interp_time)
-                    processed_O2 = analysis.shifter().corr_align(meants, pre_O2)
-                    processed_CO2 = analysis.shifter().corr_align(meants, pre_CO2)
+                elif block:
+                    if verb:
+                        print('Starting block for', id)
+                    pre_O2 = analysis.peak_analysis().block_signal(meants, endTidal.Time, endTidal.O2.apply(lambda x:x*-1))*-1
+                    pre_CO2 = analysis.peak_analysis().block_signal(meants, endTidal.Time, endTidal.CO2)
+
                 else:
+                    if verb:
+                        print('Starting peaks for', id)
                     #get peak data
-                    pre_CO2, pre_O2 = analysis.peak_analysis.get_peaks(endTidal, len(meants), verb, f_path, interp_time, trough)
+                    pre_CO2, pre_O2 = analysis.peak_analysis().get_peaks(endTidal, len(meants), verb, f_path, interp_time, trough)
 
-                    # get shifted O2 and CO2
-                    processed_CO2 = analysis.shifter().corr_align(meants, pre_CO2)
-                    processed_O2 = analysis.shifter().corr_align(meants, pre_O2)
+                # get shifted O2 and CO2
+                processed_O2 = analysis.shifter().corr_align(meants, pre_O2)
+                processed_CO2 = analysis.shifter().corr_align(meants, pre_CO2)
 
-                    # if post:
-                        # low-pass filter on end-tidal peaks
 
                 #storing cleaned data paths
                 ET_dict['ETO2'].append(save_O2)
@@ -309,27 +338,31 @@ for smoothing in ['none', 'pre']:
 
                 # save and create plots (shifts)
                 analysis.stat_utils().save_plots(df=endTidal, O2=pre_O2, O2_shift=processed_O2, CO2=pre_CO2, CO2_shift=processed_CO2, meants=meants, f_path=f_path, key=key, verb=verb, TR=interp_time)
+                # analysis.stat_utils().save_plots(df=endTidal, O2=pre_O2, O2_shift=processed_O2, CO2=pre_CO2, CO2_shift=processed_CO2, meants=meants, f_path=graphs_dir+id, key=key, verb=verb, TR=interp_time)
 
             #fit to linear model
-            coeffs = analysis.optimizer().stochastic_optimize_GLM(processed_O2, processed_CO2, meants, lifespan=1000)
+            if not no_r2:
+                if verb:
+                    print('Constructing a predicted meants using gas files')
+                coeffs = analysis.optimizer().stochastic_optimize_GLM(processed_O2, processed_CO2, meants, lifespan=10000)
 
-            #generate prediction
-            peak_prediction = coeffs[0]*processed_O2 + coeffs[1]*processed_CO2 +coeffs[2]
+                #generate prediction
+                peak_prediction = coeffs[0]*processed_O2 + coeffs[1]*processed_CO2 +coeffs[2]
 
-            #get r^2
-            regress_score = metrics.r2_score(meants, peak_prediction)
-            print("Regression score for:",id,' is ', regress_score)
-            r2_dic['ID'].append(id)
-            r2_dic['type'].append(key)
-            r2_dic['r2'].append(regress_score)
+                #get r^2
+                regress_score = metrics.r2_score(meants, peak_prediction)
+                print("Regression score for:",id,' is ', regress_score)
+                r2_dic['ID'].append(id)
+                r2_dic['type'].append(key)
+                r2_dic['r2'].append(regress_score)
 
-            # save and create plots (regression)
-            plt.figure(figsize=(20,10))
-            plt.plot(meants)
-            plt.plot(peak_prediction)
-            plt.savefig(f_path[:-4]+'/'+key+'regression_plot.png')
-            plt.clf()
-            plt.close()
+                # save and create plots (regression)
+                plt.figure(figsize=(20,10))
+                plt.plot(meants)
+                plt.plot(peak_prediction)
+                plt.savefig(f_path[:-4]+'/'+key+'regression_plot.png')
+                plt.clf()
+                plt.close()
 
         if verb:
             print('Finished processing each patient')
@@ -339,47 +372,125 @@ for smoothing in ['none', 'pre']:
         et_frame = pd.DataFrame(ET_dict)
 
         #concat and rop bad dataframes
-        p_df = pd.concat((p_df, pd.DataFrame(ET_dict)), axis=1)
-        p_df = p_df[p_df.ET_exists != False].drop('ET_exists', axis = 1)
+        df = pd.concat((p_df, pd.DataFrame(ET_dict)), axis=1)
+        df = df[df.ET_exists != False].drop('ET_exists', axis = 1)
 
         #reset indeces
-        p_df = p_df.reset_index(drop=True)
+        df = df.reset_index(drop=True)
 
-        #print(p_df.head())
+        # print("df head----------------\n",p_df.head())
 
-        # if verb:
-        #     print('Starting to run feat')
-        # #run Feat
-        # #check for (and make) feat directory
-        # if not os.path.exists(feat_dir):
-        #     os.mkdir(feat_dir)
-        #
-        # #make design file directory
-        # if not os.path.exists(feat_dir+'design_files/'):
-        #     os.mkdir(feat_dir+'design_files/')
-        #
-        # #load design template
-        # with open(feat_dir+'design_files/template', 'r') as template:
-        #     stringTemp = template.read()
-        #     for i in range(len(p_df)):
-        #         output_dir = feat_dir+p_df.Cohort[i]+p_df.ID[i]
-        #         # if not os.path.exists(output_dir):
-        #         #     os.mkdir(output_dir)
-        #         to_write = stringTemp[:]
-        #         # print(to_write)
-        #         to_write = to_write.replace("%%OUTPUT_DIR%%",'"'+output_dir+'"')
-        #         to_write = to_write.replace("%%VOLUMES%%",'"'+str(p_df.Dimension[i])+'"')
-        #         to_write = to_write.replace("%%TR%%",'"'+str(p_df.TR[i])+'"')
-        #         to_write = to_write.replace("%%BOLD_FILE%%",'"'+p_df.BOLD_path[i]+'"')
-        #         to_write = to_write.replace("%%FS_T1%%",'"'+p_df.T1_path[i]+'"')
-        #         to_write = to_write.replace("%%O2_CONTRAST%%",'"'+p_df.ETO2[i]+'"')
-        #         to_write = to_write.replace("%%CO2_CONTRAST%%",'"'+p_df.ETCO2[i]+'"')
-        #
-        #         with open(feat_dir+'design_files/'+p_df.ID[i]+'.fsf', 'w+') as outFile:
-        #             outFile.write(to_write)
-        #
-        #         os.spawnlp(os.P_NOWAIT, 'feat', 'feat', feat_dir+'design_files/'+key+p_df.ID[i]+'.fsf', '&')
-                # print('written')
+        if verb:
+            print('Starting to run feat')
+        #run Feat
+        #check for (and make) feat directory
+        if not os.path.exists(feat_dir):
+            os.mkdir(feat_dir)
+
+        #make design file directory
+        if not os.path.exists(feat_dir+'design_files/'):
+            os.mkdir(feat_dir+'design_files/')
+
+
+        # load design template
+        with open(feat_dir+'design_files/template', 'r') as template:
+            stringTemp = template.read()
+            for i in range(len(df)):
+                output_dir = feat_dir+key+p_df.Cohort[i]+p_df.ID[i]
+                if os.path.exists(output_dir+'.feat'):
+                    if verb:
+                        print('FEAT already exists for', p_df.Cohort[i]+p_df.ID[i])
+                    if over:
+                        if verb:
+                            print('Overwriting')
+                        subprocess.Popen(['rm', '-rf', output_dir+'.feat'])
+                    else:
+                        continue
+                to_write = stringTemp[:]
+                # print(to_write)
+                to_write = to_write.replace("%%OUTPUT_DIR%%",'"'+output_dir+'"')
+                to_write = to_write.replace("%%VOLUMES%%",'"'+str(df.Dimension[i])+'"')
+                to_write = to_write.replace("%%TR%%",'"'+str(df.TR[i])+'"')
+                to_write = to_write.replace("%%BOLD_FILE%%",'"'+df.BOLD_path[i]+'"')
+                to_write = to_write.replace("%%FS_T1%%",'"'+df.T1_path[i]+'"')
+                to_write = to_write.replace("%%O2_CONTRAST%%",'"'+df.ETO2[i]+'"')
+                to_write = to_write.replace("%%CO2_CONTRAST%%",'"'+df.ETCO2[i]+'"')
+
+                ds_path = feat_dir+'design_files/'+key+df.ID[i]+'.fsf'
+                with open(ds_path, 'w+') as outFile:
+                    outFile.write(to_write)
+
+                msg = False
+                spin = '|/-\\'
+                cursor = 0
+                while not any(v is None for v in pro):
+                    if verb:
+                        if not msg:
+                            print("There are 10 FEATs currently running. Waiting for at least one to end.")
+                            msg = True
+                        else:
+                            sys.stdout.write(spin[cursor])
+                            sys.stdout.flush()
+                            cursor += 1
+                            if cursor >= len(spin):
+                                cursor = 0
+                    for process in pro:
+                        if process.poll()!= None:
+                            pro[pro.index(process)] = None
+                            break
+                    if verb:
+                        if msg:
+                            time.sleep(0.2)
+                            sys.stdout.write('\b')
+                            
+                index = pro.index(None)
+                # os.spawnlp(os.P_NOWAIT, 'feat', 'feat', ds_path, '&')
+                if verb:
+                    print('Starting FEAT')
+                pro[index] = subprocess.Popen(['feat', ds_path, '&'])
+                # subprocess.Popen(['feat', ds_path, '&'])
+                time.sleep(0.5)
+
+        while not all(v is None for v in pro):
+            if verb:
+                if not msg:
+                    print("Waiting for the remaining FEAT to finish")
+                    msg = True
+                else:
+                    sys.stdout.write(spin[cursor])
+                    sys.stdout.flush()
+                    cursor += 1
+                    if cursor >= len(spin):
+                        cursor = 0
+            for process in pro:
+                if process != None and process.poll()!= None:
+                    pro[pro.index(process)] = None
+                    break
+            if verb:
+                if msg:
+                    time.sleep(0.2)
+                    sys.stdout.write('\b')
+
+        # run featquery
+        for i in range(len(p_df)):
+            feat_output_dir = feat_dir+key+p_df.Cohort[i]+p_df.ID[i]+'.feat'
+            if os.path.exists(feat_output_dir+'/featquery'):
+                if verb:
+                    print('featquery exists for', p_df.Cohort[i]+p_df.ID[i])
+                if over:
+                    if verb:
+                        print('Overwritting')
+                    subprocess.Popen(['rm', '-rf', feat_output_dir+'/featquery'])
+                else:
+                    continue
+            O2_mask_dir_path = feat_output_dir+'/cluster_mask_zstat1.nii.gz'
+            CO2_mask_dir_path = feat_output_dir+'/cluster_mask_zstat2.nii.gz'
+            if verb:
+                print('Running featquery on', p_df.Cohort[i]+p_df.ID[i])
+            subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope1', 'fq_O2', '-p', '-s', O2_mask_dir_path])
+            subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope2', 'fq_CO2', '-p', '-s', CO2_mask_dir_path])
+#           os.spawnlp(os.P_NOWAIT, 'featquery', 'featquery', '1', feat_output_dir, '1', 'stats/cope1', 'ftqry_O2', '-p', '-s', '-w', O2_mask_dir_path, '&')
+#           os.spawnlp(os.P_NOWAIT, 'featquery', 'featquery', '1', feat_output_dir, '1', 'stats/cope2', 'ftqry_CO2', '-p', '-s', '-w', CO2_mask_dir_path, '&')
 
 if any([r2_dic[key] for key in r2_dic]):
     r2 = pd.DataFrame(r2_dic)
