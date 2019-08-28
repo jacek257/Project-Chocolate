@@ -1,2 +1,0 @@
-# Project: Chocolate
-### Austin, Jimi
