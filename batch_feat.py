@@ -280,7 +280,7 @@ for typ in ['four', 'peak', 'trough', 'block']:
             ET_dict['ETO2'].append('')
             ET_dict['ETCO2'].append('')
             ET_dict['ET_exists'].append(False)
-            print("\tpatient: ", cohort+id, " is has empty end-tidal")
+            print("\tpatient: ", cohort+id, "has empty end-tidal")
             continue
 
         meants = np.loadtxt(meants_path, delimiter='\n')
@@ -385,7 +385,9 @@ for typ in ['four', 'peak', 'trough', 'block']:
 
     #construct new DataFrame
     et_frame = pd.DataFrame(ET_dict)
-
+    
+    print(et_frame)
+    
     #concat and rop bad dataframes
     df = pd.concat((p_df, pd.DataFrame(ET_dict)), axis=1)
     df = df[df.ET_exists != False].drop('ET_exists', axis = 1)
@@ -412,10 +414,10 @@ for typ in ['four', 'peak', 'trough', 'block']:
         stringTemp = template.read()
         skip = False
         for i in range(len(df)):
-            output_dir = feat_dir+key+p_df.Cohort[i]+p_df.ID[i]
+            output_dir = feat_dir+key+df.Cohort[i]+p_df.ID[i]
             if os.path.exists(output_dir+'.feat'):
                 if verb:
-                    print('FEAT already exists for', p_df.Cohort[i]+p_df.ID[i])
+                    print('FEAT already exists for', df.Cohort[i]+p_df.ID[i])
                 if over:
                     if verb:
                         print('Overwriting')
