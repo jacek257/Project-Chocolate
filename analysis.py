@@ -8,8 +8,6 @@ import numpy as np
 import scipy.signal as sg
 import scipy.interpolate as interp
 from scipy.fftpack import fft, ifft
-import os, sys
-import time
 from tqdm import tqdm
 
 class fft_analysis:
@@ -72,10 +70,10 @@ class fft_analysis:
         inverted = ifft(pre_invert).real
 
 
-        # if(time_series[len(time_series)-1]<10):
-        #     time_series = time_series*60
-        # else:
-        #     time_series = time_series
+        if(time_series[len(time_series)-1]<10):
+             time_series = time_series*60
+        else:
+             time_series = time_series
 
         resample_ts = np.arange(0,480,TR)
         resampler = interp.interp1d(time_series, inverted, fill_value="extrapolate")
@@ -184,6 +182,9 @@ class stat_utils:
             print('Creating plots to be saved')
         # create subplots for png file later
         f, axes = plt.subplots(2, 3)
+        
+        if df.Time.max() < 10:
+            df.Time = df.Time * 60
 
         sns.lineplot(x='Time', y='O2', data=df, linewidth=1, color='b', ax=axes[0, 0])
         sns.lineplot(x=resample_ts, y=O2, linewidth=2, color='g', ax=axes[0, 0])
@@ -211,8 +212,9 @@ class stat_utils:
         f.savefig(save_path)
         if verb:
             print('Saving complete')
-        plt.show()
+#        plt.show()
         f.clf()
+        plt.close(fig=f)
 
         if verb:
             print()
@@ -241,6 +243,54 @@ class stat_utils:
 
 class peak_analysis:
     """docstring for peak_analysis."""
+
+    def peak_four(self, df, verb, file, TR, trough=False):
+        
+        # set the size of the graphs
+        sns.set(rc={'figure.figsize':(20,10)})
+        
+        f_O2 = fft_analysis().fourier_filter_no_resample(df.Time, df.O2, 3, 35)
+        f_CO2 = fft_analysis().fourier_filter_no_resample(df.Time, df.CO2, 3, 35)          
+        
+        if df.Time.max() < 10:
+            df.Time = df.Time * 60
+
+        # get the troughs of the O2 data
+        O2_data, _ = sg.find_peaks(df.O2.apply(lambda x:x*-1), prominence=2)
+        CO2_df = df.drop(columns=['CO2'])
+        O2_df = df.iloc[O2_data]
+        
+        f_O2_resamp = interp.interp1d(df.Time, f_O2, fill_value="extrapolate")
+        f_O2_final = f_O2_resamp(O2_df.Time)
+        
+        O2_df['cmp'] = O2_df.O2 < f_O2_final
+        
+        O2_df = O2_df[O2_df.cmp == True].drop(columns=['cmp'])
+        
+        if trough:
+            CO2_data, _ = sg.find_peaks(df.CO2.apply(lambda x:x*-1), prominence=3)
+        else:
+            CO2_data, _ = sg.find_peaks(df.CO2, prominence=3) 
+        
+        CO2_df = df.drop(columns=['O2'])
+        CO2_df = CO2_df.iloc[CO2_data]
+        
+        f_CO2_resamp = interp.interp1d(df.Time, f_CO2, fill_value="extrapolate")
+        f_CO2_final = f_CO2_resamp(CO2_df.Time)
+        
+        if trough:
+            CO2_df['cmp'] = CO2_df.CO2 < f_CO2_final
+        else:
+            CO2_df['cmp'] = CO2_df.CO2 > f_CO2_final
+        
+        CO2_df = CO2_df[CO2_df.cmp == True].drop(columns=['cmp'])
+
+        CO2_resamp = interp.interp1d(CO2_df.Time, CO2_df.CO2, fill_value='extrapolate')
+        CO2_final = CO2_resamp(np.arange(0,480,TR))
+        O2_resamp = interp.interp1d(O2_df.Time, O2_df.O2, fill_value='extrapolate')
+        O2_final = O2_resamp(np.arange(0,480,TR))
+
+        return CO2_final, O2_final
 
     def get_peaks(self, df, length, verb, file, TR, trough=False):
         """
@@ -363,10 +413,9 @@ class peak_analysis:
         return window_length
 
 
-    def block_signal(self, base, sig_time, sig):
+    def block_signal(self, sig_time, sig, TR):
         """
         Params:
-            base (iterable) = base/reference signal
             sigtime (iterable) = the sampling time points of sig
             sig (iterable) = signal to perform peakfinding and resampling on
 
@@ -376,10 +425,11 @@ class peak_analysis:
         cpy = sig
         cpy = cpy.reset_index(drop=True)
         count = 0
+        
+        if sig_time.max() < 10:
+            sig_time = sig_time * 60
 
         window_length = self.get_wlen(sig_time, cpy)
-
-        print('wlen:', window_length)
 
         for i in range(0,len(cpy),window_length):
             for j in range(i, i+window_length):
@@ -388,7 +438,7 @@ class peak_analysis:
             count += 1
 
         # get the sampling freq
-        fs = len(sig)/np.max(sig_time)
+        fs = len(cpy)/np.max(sig_time)
         # get cutoff freq
         fc = count / np.max(sig_time)
         w = fc / (fs / 2)
@@ -398,7 +448,7 @@ class peak_analysis:
 
         # return filtered
         signal_resampler = interp.interp1d(sig_time, filtered, fill_value='extrapolate')
-        signal_resampled = signal_resampler(np.linspace(0, 480, len(base)))
+        signal_resampled = signal_resampler(np.arange(0,480,TR))
 
         return signal_resampled
 
@@ -432,7 +482,7 @@ class shifter:
         #return square weighted average
         return buffer/(np.sum(data_series**2))
 
-    def align_centroid(self, base_time, base_sig, time1, sig1, time2, sig2): #TODO: arbitrary number of centroids
+    def align_centroid(self, base_time, base_sig, time1, sig1, time2, sig2):
         """
         aligns several (3) time series based on their relative temporal centroids
 
@@ -629,7 +679,7 @@ class optimizer:
         B = B*factorB
         return return_tuple
 
-    def stochastic_optimize_GLM(self, S1, S2, B, init_tuple = (0,0,0), descent_speed=.1, lifespan = 100, p_factor = .9): #TODO: look-ahead grad. descent
+    def stochastic_optimize_GLM(self, S1, S2, B, init_tuple = (0,0,0), descent_speed=.1, lifespan = 100, p_factor = .9):
         """
         linear coefficient optimizer by stochastic gradient descent
 

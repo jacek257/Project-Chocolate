@@ -101,6 +101,7 @@ class fft_analysis:
         """
         plt.figure(figsize=(20,10))
         plt.semilogx(x = freq_dom, y = plottable)
+        plt.show()
 
 class stat_utils:
     """docstring for stat_utils."""
@@ -241,6 +242,50 @@ class stat_utils:
 
 class peak_analysis:
     """docstring for peak_analysis."""
+    
+    def peak_four(df, length, verb, file, TR, trough=False):
+        
+        # set the size of the graphs
+        sns.set(rc={'figure.figsize':(20,10)})
+        
+        #convert time series to seconds
+        if(df.Time[len(df)-1]<10):
+            df.Time = df.Time*60
+            
+        # get the troughs of the O2 data
+        O2_data, _ = sg.find_peaks(df.O2.apply(lambda x:x*-1), prominence=2)
+        O2_df = df.iloc[O2_data]
+        
+        if trough:
+            CO2_data, _ = sg.find_peaks(df.CO2.apply(lambda x:x*-1), prominence=3)
+        else:
+            CO2_data, _ = sg.find_peaks(df.CO2, prominence=3) 
+        CO2_df = df.iloc[CO2_data]
+
+        CO2_resamp = interp.interp1d(CO2_df.Time, CO2_df.CO2, fill_value='extrapolate')
+        CO2_final = CO2_resamp(np.linspace(0, 480, length))
+        O2_resamp = interp.interp1d(O2_df.Time, O2_df.O2, fill_value='extrapolate')
+        O2_final = O2_resamp(np.linspace(0, 480, length))
+        
+        f_O2 = fft_analysis().fourier_filter(df.Time, df.O2, 3, 35, TR)
+        f_CO2 = fft_analysis().fourier_filter(df.Time, df.CO2, 3, 35, TR)
+        
+        O2 = O2_final[O2_final < f_O2]
+        if(len(O2) < len(O2_final)):
+            O2_df = O2_df.iloc[O2]
+            O2_resamp = interp.interp1d(O2_df.Time, O2_df.O2, fill_value='extrapolate')
+            O2 = O2_resamp(np.linspace(0, 480, 480/length))
+        
+        if trough:
+            CO2 = CO2_final[CO2_final < f_CO2]
+        else:
+            CO2 = CO2_final[CO2_final > f_CO2]
+        if(len(O2) < len(CO2_final)):
+            CO2_df = CO2_df.iloc[CO2]
+            CO2_resamp = interp.interp1d(O2_df.Time, O2_df.O2, fill_value='extrapolate')
+            CO2 = CO2_resamp(np.linspace(0, 480, 480/length))
+        
+        return CO2, O2
 
     def get_peaks(df, length, verb, file, TR, trough=False):
         """

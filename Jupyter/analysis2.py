@@ -72,10 +72,10 @@ class fft_analysis:
         inverted = ifft(pre_invert).real
 
 
-        # if(time_series[len(time_series)-1]<10):
-        #     time_series = time_series*60
-        # else:
-        #     time_series = time_series
+        if(time_series[len(time_series)-1]<10):
+            time_series = time_series*60
+        else:
+            time_series = time_series
 
         resample_ts = np.arange(0,480,TR)
         resampler = interp.interp1d(time_series, inverted, fill_value="extrapolate")
