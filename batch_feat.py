@@ -480,10 +480,6 @@ for typ in ['four', 'peak', 'trough', 'block']:
                     
             feat_output_dir = feat_dir+key+p_df.Cohort[i]+p_df.ID[i]+'.feat/'
             
-            print()
-            print(feat_output_dir)
-            print()
-            
             cz1 = pd.read_csv(feat_output_dir+'cluster_zstat1_std.txt', sep='\t', usecols=['-log10(P)', 'Z-MAX', 'COPE-MEAN'])
             cz1['ID'] = p_df.Cohort[i]+p_df.ID[i]
             cz1['type'] = key
@@ -498,8 +494,6 @@ for typ in ['four', 'peak', 'trough', 'block']:
             
             O2_mask_dir_path = feat_output_dir+'cluster_mask_zstat1.nii.gz'
             CO2_mask_dir_path = feat_output_dir+'cluster_mask_zstat2.nii.gz'
-            
-            print('\n'+feat_output_dir+'\n')
             
             if os.path.exists(feat_output_dir+'fq_O2'):
                 if verb:
