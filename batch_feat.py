@@ -452,15 +452,15 @@ for typ in ['four', 'peak', 'trough', 'block']:
                         time.sleep(0.2)
                         sys.stdout.write('\b')
                     
-            feat_output_dir = feat_dir+key+p_df.Cohort[i]+p_df.ID[i]+'.feat/'
+            feat_output_dir = feat_dir+key+df.Cohort[i]+df.ID[i]+'.feat/'
             
             cz1 = pd.read_csv(feat_output_dir+'cluster_zstat1_std.txt', sep='\t', usecols=['-log10(P)', 'Z-MAX', 'COPE-MEAN'])
-            cz1['ID'] = p_df.Cohort[i]+p_df.ID[i]
+            cz1['ID'] = df.Cohort[i]+df.ID[i]
             cz1['type'] = key
             cz1 = cz1[['ID', 'type', '-log10(P)', 'Z-MAX', 'COPE-MEAN']]
             
             cz2 = pd.read_csv(feat_output_dir+'cluster_zstat2_std.txt', sep='\t', usecols=['-log10(P)', 'Z-MAX', 'COPE-MEAN'])
-            cz2['ID'] = p_df.Cohort[i]+p_df.ID[i]
+            cz2['ID'] = df.Cohort[i]+df.ID[i]
             cz2['type'] = key
             cz2 = cz2[['ID', 'type', '-log10(P)', 'Z-MAX', 'COPE-MEAN']]
             
@@ -471,7 +471,7 @@ for typ in ['four', 'peak', 'trough', 'block']:
             
             if os.path.exists(feat_output_dir+'fq_O2'):
                 if verb:
-                    print('O2 featquery already exists for', p_df.Cohort[i]+p_df.ID[i])
+                    print('O2 featquery already exists for', df.Cohort[i]+df.ID[i])
                 if over:
                     if verb:
                         print('Overwriting')
@@ -484,7 +484,7 @@ for typ in ['four', 'peak', 'trough', 'block']:
             O2 = feat_output_dir+'fq_O2/'
             fq1 = pd.read_csv(O2+'report.txt', sep='\t| ', header=None, usecols=[5], engine='python')
             fq1 = fq1.rename(columns={5 : 'mean'})
-            fq1['ID'] = p_df.Cohort[i]+p_df.ID[i]
+            fq1['ID'] = df.Cohort[i]+df.ID[i]
             fq1['type'] = key
             fq1 = fq1[['ID', 'type', 'mean']]
             build = build.merge(fq1, on=['ID', 'type'], suffixes=('_O2', '_CO2'))
@@ -492,7 +492,7 @@ for typ in ['four', 'peak', 'trough', 'block']:
             
             if os.path.exists(feat_output_dir+'fq_CO2'):
                 if verb:
-                    print('CO2 featquery already exists for', p_df.Cohort[i]+p_df.ID[i])
+                    print('CO2 featquery already exists for', df.Cohort[i]+df.ID[i])
                 if over:
                     if verb:
                         print('Overwriting')
@@ -505,7 +505,7 @@ for typ in ['four', 'peak', 'trough', 'block']:
             CO2 = feat_output_dir+'fq_CO2/'
             fq2 = pd.read_csv(O2+'report.txt', sep='\t| ', header=None, usecols=[5], engine='python')
             fq2 = fq2.rename(columns={5 : 'mean'})
-            fq2['ID'] = p_df.Cohort[i]+p_df.ID[i]
+            fq2['ID'] = df.Cohort[i]+df.ID[i]
             fq2['type'] = key
             fq2 = fq2[['ID', 'type', 'mean']]
             build = build.merge(fq2, on=['ID', 'type'], suffixes=('_O2', '_CO2'))
