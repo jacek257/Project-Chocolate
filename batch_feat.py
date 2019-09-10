@@ -42,9 +42,6 @@ over = True if args.overwrite else False
 block = True if args.block else False
 no_r2 = True if args.no_r2 else False
 
-# limit the number of process that can be ran at the same time
-pro = [None] * 10
-
 ###########set directories (TODO, automate)
 home_dir = '/media/ke/8tb_part2/FSL_work/'
 nifti_dir = '/media/ke/8tb_part2/FSL_work/SH_info/'
@@ -386,8 +383,6 @@ for typ in ['four', 'peak', 'trough', 'block']:
     #construct new DataFrame
     et_frame = pd.DataFrame(ET_dict)
     
-    print(et_frame)
-    
     #concat and rop bad dataframes
     df = pd.concat((p_df, pd.DataFrame(ET_dict)), axis=1)
     df = df[df.ET_exists != False].drop('ET_exists', axis = 1)
@@ -412,12 +407,12 @@ for typ in ['four', 'peak', 'trough', 'block']:
     # load design template
     with open(feat_dir+'design_files/template', 'r') as template:
         stringTemp = template.read()
-        skip = False
         for i in range(len(df)):
-            output_dir = feat_dir+key+df.Cohort[i]+p_df.ID[i]
+            skip = False
+            output_dir = feat_dir+key+df.Cohort[i]+df.ID[i]
             if os.path.exists(output_dir+'.feat'):
                 if verb:
-                    print('FEAT already exists for', df.Cohort[i]+p_df.ID[i])
+                    print('FEAT already exists for', df.Cohort[i]+df.ID[i])
                 if over:
                     if verb:
                         print('Overwriting')
@@ -442,31 +437,8 @@ for typ in ['four', 'peak', 'trough', 'block']:
                 msg = False
                 spin = '|/-\\'
                 cursor = 0
-    #                while not any(v is None for v in pro):
-    #                    if verb:
-    #                        if not msg:
-    #                            print("There are 10 FEATs currently running. Waiting for at least one to end.")
-    #                            msg = True
-    #                        else:
-    #                            sys.stdout.write(spin[cursor])
-    #                            sys.stdout.flush()
-    #                            cursor += 1
-    #                            if cursor >= len(spin):
-    #                                cursor = 0
-    #                    for process in pro:
-    #                        if process.poll()!= None:
-    #                            pro[pro.index(process)] = None
-    #                            break
-    #                    if verb:
-    #                        if msg:
-    #                            time.sleep(0.2)
-    #                            sys.stdout.write('\b')
-    #                            
-    #                index = pro.index(None)
-                # os.spawnlp(os.P_NOWAIT, 'feat', 'feat', ds_path, '&')
                 if verb:
                     print('Starting FEAT')
-    #                pro[index] = subprocess.Popen(['feat', ds_path, '&'])
                 process = subprocess.Popen(['feat', ds_path, '&'])
                 time.sleep(0.3)
                 
