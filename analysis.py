@@ -9,27 +9,27 @@ import scipy.signal as sg
 import scipy.interpolate as interp
 from scipy.fftpack import fft, ifft
 from tqdm import tqdm
+import sys
+import time
+import subprocess
+import os
+import signal
 
 class fft_analysis:
     """docstring for fft_analysis."""
 
-    def getDataArray(self, f_path):
-        df = pd.read_csv(f_path, sep='\t', names=['Time', 'O2', 'CO2', 'thrw', 'away'],
-                     usecols=['Time', 'O2', 'CO2'], index_col=False)
-        return df[["Time","O2","CO2"]]
-
-    def fourier_trans(self, t_step, data):
+    def fourier_trans(self, spacing, data):
         """
         returns a tuple: (frequency domain, Power spectra, abs(power_spectra))
 
-        t_step = temporal resolution of the time series (data)
+        spacing = the distance between data points
         data = series to be analyzed
         """
 
         N = len(data)
 
         #create freq_dom from timestep
-        freq_dom = np.linspace(0,1/(2*t_step),N//2)
+        freq_dom = np.linspace(0, 1/(2*spacing), N)
         #perform fft
         power_spectra = fft(data)
         #abs(fft) cut in half
@@ -55,7 +55,7 @@ class fft_analysis:
                 cp[-i] = 0
         return np.copy(cp)
 
-    def fourier_filter(self, time_series, data, low_f, high_f, TR):
+    def fourier_filter(self, time_series, data, low_f, high_f, tr, time_points):
         """
         Driver module: runs fourier_trans() and my_filter() and downsamples
 
@@ -65,19 +65,23 @@ class fft_analysis:
         high_f = upper frequency bound
         TR = repetition time: found in BOLD .json
         """
-        freq, power, disp = self.fourier_trans(time_series[1], data)
+#
+#        if(time_series.max()<10):
+#             time_series = time_series*60
+#        else:
+#             time_series = time_series
+        
+        freq, power, disp = self.fourier_trans(max(time_series)/len(time_series), data)
         pre_invert = self.my_filter(low_f,high_f, freq, power)
         inverted = ifft(pre_invert).real
 
+#        resample_ts = time_points
+#        resampler = interp.interp1d(time_series, inverted, fill_value="extrapolate")
+        
+        return pd.DataFrame({'Time' : time_series,
+                             'Data' : inverted})
+#                             'Data' : resampler(time_series)})
 
-        if(time_series[len(time_series)-1]<10):
-             time_series = time_series*60
-        else:
-             time_series = time_series
-
-        resample_ts = np.arange(0,480,TR)
-        resampler = interp.interp1d(time_series, inverted, fill_value="extrapolate")
-        return (resampler(resample_ts))
 
     def fourier_filter_no_resample(self, time_series, data, low_f, high_f):
         """
@@ -91,39 +95,13 @@ class fft_analysis:
         freq, power, disp = self.fourier_trans(time_series[1], data)
         pre_invert = self.my_filter(low_f,high_f, freq, power)
         inverted = ifft(pre_invert).real
-        return inverted
-
-    def plotFourier(self, freq_dom, plottable):
-        """
-        self explanatory in name
-        """
-        plt.figure(figsize=(20,10))
-        plt.semilogx(x = freq_dom, y = plottable)
+        return pd.DataFrame({'Time' : time_series,
+                             'Data' : inverted})
 
 class stat_utils:
     """docstring for stat_utils."""
 
-    def showMe(*plots):
-        """
-        plots all data passed as a parameter
-        x-axis is the integer index of each data list
-
-        return:
-            none
-        """
-        plt.figure(figsize=(20,10))
-        for p in plots:
-            plt.plot(p)
-        plt.show()
-
-    def save_meants(self, meants, peak_prediction, f_path):
-        #generate predicted plot and meants plot
-        plt.plot(np.linspace(0,480, len(meants)), meants, label='meants')
-        plt.plot(np.linspace(0,480, len(meants)), peak_prediction, label='predicted')
-        plt.legend()
-        plt.savefig(f_path[:-4]+'/regression_plot.png')
-
-    def save_plots(self, df, O2, O2_shift, CO2, CO2_shift, meants, f_path, key, verb, TR):
+    def save_plots(self, df, O2_time, O2, O2_shift, O2_correlation, CO2_time, CO2, CO2_shift, CO2_correlation, meants, f_path, key, verb, time_points, TR):
         """
         Create and saves plots for CO2 and O2 data
 
@@ -158,9 +136,6 @@ class stat_utils:
         # set the size of the graphs
         sns.set(rc={'figure.figsize':(60,20)})
 
-        #construct interpolation time_step series
-        resample_ts = np.arange(0,480,TR)
-
         # normalize data
         meants_norm = meants - meants.mean()
         meants_norm /= meants_norm.std()
@@ -179,36 +154,29 @@ class stat_utils:
 
 
         if verb:
-            print('Creating plots to be saved')
+            print('Creating O2 plots to be saved')
         # create subplots for png file later
-        f, axes = plt.subplots(2, 3)
+        f, axes = plt.subplots(2, 2)
         
-        if df.Time.max() < 10:
-            df.Time = df.Time * 60
+#        if df.Time.max() < 10:
+#            df.Time = df.Time * 60
 
         sns.lineplot(x='Time', y='O2', data=df, linewidth=1, color='b', ax=axes[0, 0])
-        sns.lineplot(x=resample_ts, y=O2, linewidth=2, color='g', ax=axes[0, 0])
+        sns.lineplot(x=O2_time, y=O2, linewidth=2, color='g', ax=axes[0, 0])
 
-        sns.lineplot(x='Time', y='CO2', data=df, linewidth=1, color='b', ax=axes[1, 0])
-        sns.lineplot(x=resample_ts, y=CO2, linewidth=2, color='r', ax=axes[1, 0])
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0,1])
+        sns.lineplot(x=O2_time, y=O2_norm, color='g', ax=axes[0,1])
+        
+        sns.lineplot(x=np.arange(-len(O2_correlation)//2, len(O2_correlation)//2)+1, y=O2_correlation, ax=axes[1,0])
 
-        sns.lineplot(x=resample_ts, y=meants_norm, color='b', ax=axes[0,1])
-        sns.lineplot(x=resample_ts, y=O2_norm, color='g', ax=axes[0,1])
-
-        sns.lineplot(x=resample_ts, y=meants_norm, color='b', ax=axes[1,1])
-        sns.lineplot(x=resample_ts, y=CO2_norm, color='r', ax=axes[1,1])
-
-        sns.lineplot(x=resample_ts, y=meants_norm, color='b', ax=axes[0,2])
-        sns.lineplot(x=resample_ts, y=O2_shift_norm, color='g', ax=axes[0,2])
-
-        sns.lineplot(x=resample_ts, y=meants_norm, color='b', ax=axes[1,2])
-        sns.lineplot(x=resample_ts, y=CO2_shift_norm, color='r', ax=axes[1,2])
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1,1])
+        sns.lineplot(x=time_points, y=O2_shift_norm, color='g', ax=axes[1,1])
 
         # save the plot
         if verb:
-            print('Saving plots for', f_path)
+            print('Saving O2 plots for', f_path)
 
-        save_path = save_path = f_path[:-4]+'/' + key + 'graph.png'
+        save_path = save_path = f_path[:-4]+'/' + key + 'O2_graph.png'
         f.savefig(save_path)
         if verb:
             print('Saving complete')
@@ -217,7 +185,32 @@ class stat_utils:
         plt.close(fig=f)
 
         if verb:
-            print()
+            print('Creating CO2 plots to be saved')
+        # create subplots for png file later
+        f, axes = plt.subplots(2, 2)
+
+        sns.lineplot(x='Time', y='CO2', data=df, linewidth=1, color='b', ax=axes[0, 0])
+        sns.lineplot(x=O2_time, y=CO2, linewidth=2, color='r', ax=axes[0, 0])
+
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0,1])
+        sns.lineplot(x=CO2_time, y=CO2_norm, color='r', ax=axes[0,1])
+        
+        sns.lineplot(x=np.arange(-len(CO2_correlation)//2, len(CO2_correlation)//2)+1, y=CO2_correlation, ax=axes[1,0])
+
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1,1])
+        sns.lineplot(x=time_points, y=CO2_shift_norm, color='r', ax=axes[1,1])
+
+        # save the plot
+        if verb:
+            print('Saving CO2 plots for', f_path)
+
+        save_path = save_path = f_path[:-4]+'/' + key + 'CO2_graph.png'
+        f.savefig(save_path)
+        if verb:
+            print('Saving complete')
+#        plt.show()
+        f.clf()
+        plt.close(fig=f)
 
     def get_r2(self, sig_fit, sig_obs):
         """
@@ -244,28 +237,34 @@ class stat_utils:
 class peak_analysis:
     """docstring for peak_analysis."""
 
-    def peak_four(self, df, verb, file, TR, trough=False):
+    def peak_four(self, df, verb, file, tr, time_pts, trough):
         
         # set the size of the graphs
         sns.set(rc={'figure.figsize':(20,10)})
+#        
+#        f_O2 = fft_analysis().fourier_filter_no_resample(df.Time, df.O2, 3, 35)
+#        f_CO2 = fft_analysis().fourier_filter_no_resample(df.Time, df.CO2, 3, 35)         
         
-        f_O2 = fft_analysis().fourier_filter_no_resample(df.Time, df.O2, 3, 35)
-        f_CO2 = fft_analysis().fourier_filter_no_resample(df.Time, df.CO2, 3, 35)          
+        f_O2 = fft_analysis().fourier_filter(df.Time, df.O2, 7/60, 25/60, tr, time_pts)
+        f_CO2 = fft_analysis().fourier_filter(df.Time, df.CO2, 7/60, 25/60, tr, time_pts)
         
-        if df.Time.max() < 10:
-            df.Time = df.Time * 60
+#        if df.Time.max() < 10:
+#            df.Time = df.Time * 60
 
         # get the troughs of the O2 data
         O2_data, _ = sg.find_peaks(df.O2.apply(lambda x:x*-1), prominence=2)
-        CO2_df = df.drop(columns=['CO2'])
-        O2_df = df.iloc[O2_data]
+        O2_df = df.drop(columns=['CO2'])
+        O2_df = O2_df.iloc[O2_data]
         
-        f_O2_resamp = interp.interp1d(df.Time, f_O2, fill_value="extrapolate")
+        f_O2_resamp = interp.interp1d(f_O2.Time, f_O2.Data, fill_value='extrapolate')
         f_O2_final = f_O2_resamp(O2_df.Time)
         
         O2_df['cmp'] = O2_df.O2 < f_O2_final
         
-        O2_df = O2_df[O2_df.cmp == True].drop(columns=['cmp'])
+        O2_valid_df = O2_df[O2_df.cmp == True]
+        O2_resamp = interp.interp1d(O2_valid_df.Time, O2_valid_df.O2, fill_value='extrapolate')
+        O2_final_df = pd.DataFrame({'Time' : df.Time,
+                                    'Data' : O2_resamp(df.Time)})
         
         if trough:
             CO2_data, _ = sg.find_peaks(df.CO2.apply(lambda x:x*-1), prominence=3)
@@ -275,7 +274,7 @@ class peak_analysis:
         CO2_df = df.drop(columns=['O2'])
         CO2_df = CO2_df.iloc[CO2_data]
         
-        f_CO2_resamp = interp.interp1d(df.Time, f_CO2, fill_value="extrapolate")
+        f_CO2_resamp = interp.interp1d(f_CO2.Time, f_CO2.Data , fill_value='extrapolate')
         f_CO2_final = f_CO2_resamp(CO2_df.Time)
         
         if trough:
@@ -283,123 +282,22 @@ class peak_analysis:
         else:
             CO2_df['cmp'] = CO2_df.CO2 > f_CO2_final
         
-        CO2_df = CO2_df[CO2_df.cmp == True].drop(columns=['cmp'])
+        CO2_valid_df = CO2_df[CO2_df.cmp == True].reset_index(drop=True)
+        CO2_resamp = interp.interp1d(CO2_valid_df.Time, CO2_valid_df.CO2, fill_value='extrapolate')
+        CO2_final_df = pd.DataFrame({'Time' : df.Time,
+                                     'Data' : CO2_resamp(df.Time)})
 
-        CO2_resamp = interp.interp1d(CO2_df.Time, CO2_df.CO2, fill_value='extrapolate')
-        CO2_final = CO2_resamp(np.arange(0,480,TR))
-        O2_resamp = interp.interp1d(O2_df.Time, O2_df.O2, fill_value='extrapolate')
-        O2_final = O2_resamp(np.arange(0,480,TR))
-
-        return CO2_final, O2_final
-
-    def get_peaks(self, df, length, verb, file, TR, trough=False):
-        """
-        Get the peaks and troughs of CO2 and O2
-
-        Parameters:
-            df: dataframe
-                data structure that holds the data
-            length: int
-                lenght of the BOLD data that the et_CO2 and et_O2 will be resampled to
-            verb: boolean
-                flag for verbose output
-            file: string
-                file name to be displayed during verbose output
-            TR: float
-                repetition time, found in BOLD.json
-            trough: boolean
-                get the troughs of CO2 data
-
-        Returns:
-            et_O2: array-like
-                the end-tidal O2 data
-            et_CO2: array-like
-                the end-tidal CO2 data
-        """
-
-        # set the size of the graphs
-        sns.set(rc={'figure.figsize':(20,10)})
-
-        # make a loop for user confirmation that O2 peak detection is good
-        bad = True
-        prom = 2
-        while bad:
-            # get the troughs of the O2 data
-            O2_data, _ = sg.find_peaks(df.O2.apply(lambda x:x*-1), prominence=prom)
-
-            # create scatterplot of all O2 data
-            if verb:
-                print("Creating O2 plot ", file)
-            sns.lineplot(x='Time', y='O2', data=df, linewidth=1, color='b')
-
-            # get the data points of peak
-            O2_df = df.iloc[O2_data]
-
-            # add peak overlay onto the scatterplot
-            sns.lineplot(x='Time', y='O2', data=O2_df, linewidth=2, color='g')
-            plt.show()
-            plt.close()
-
-            # ask user if the peak finding was good
-            ans = input("Was the output good enough (y/n)? \nNote: anything not starting with 'y' is considered 'n'.\n")
-            bad = True if ans == '' or ans[0].lower() != 'y' else False
-            if bad:
-                print("The following variables can be changed: ")
-                print("    1. prominence - Required prominence of peaks. Type: int")
-                try:
-                    prom = int(input("New prominence (Default is 2): "))
-                except:
-                    print("Default value used")
-                    prom = 2
-
-
-        # make another loop for user confirmation that CO2 peak detection is good
-        bad = True
-        prom = 3
-        while bad:
-            # get the troughs of the O2 data
-            if trough:
-                CO2_data, _ = sg.find_peaks(df.CO2.apply(lambda x:x*-1), prominence=prom)
-            else:
-                CO2_data, _ = sg.find_peaks(df.CO2, prominence=prom)
-
-            # create scatter of all CO2 data
-            if verb:
-                print('Creating CO2 plot ', file)
-            sns.lineplot(x='Time', y='CO2', data=df, linewidth=1, color='b')
-
-            # get the data points of peak
-            CO2_df = df.iloc[CO2_data]
-
-            # add peak overlay onto the scatterplot
-            sns.lineplot(x='Time', y='CO2', data=CO2_df, linewidth=2, color='r')
-            plt.show()
-            plt.close()
-
-            # ask user if the peak finding was good
-            ans = input("Was the output good enough (y/n)? \nNote: anything not starting with 'y' is considered 'n'.\n")
-            bad = True if ans == '' or ans[0].lower() != 'y' else False
-            if bad:
-                print("The following variables can be changed: ")
-                print("    1. prominence - Required prominence of peaks. Type: int")
-                try:
-                    prom = int(input("New prominence (Default is 3): "))
-                except:
-                    print("Default value used")
-                    prom = 3
-
-        plt.close()
-
-        CO2_resamp = interp.interp1d(CO2_df.Time, CO2_df.CO2, fill_value='extrapolate')
-        CO2_final = CO2_resamp(np.linspace(0, 480, length))
-        O2_resamp = interp.interp1d(O2_df.Time, O2_df.O2, fill_value='extrapolate')
-        O2_final = O2_resamp(np.linspace(0, 480, length))
-
-        return CO2_final, O2_final
+#        CO2_resamp = interp.interp1d(CO2_df.Time, CO2_df.CO2, fill_value='extrapolate')
+#        CO2_final = CO2_resamp(time_pts)
+#        O2_resamp = interp.interp1d(O2_df.Time, O2_df.O2, fill_value='extrapolate')
+#        O2_final = O2_resamp(time_pts)
+#
+#        return CO2_final, O2_final
+        return CO2_final_df, O2_final_df
 
     def get_wlen(self, sig_time, sig):
 
-        freq,_,power = fft_analysis().fourier_trans(sig_time[1], sig)
+        freq,_,power = fft_analysis().fourier_trans(max(sig_time)/len(sig_time), sig)
         window_it = np.argmax(power[25:500])+25
         freq_val = freq[window_it] # this is the most prominent frequency
         window_mag = 1/freq_val
@@ -413,7 +311,7 @@ class peak_analysis:
         return window_length
 
 
-    def block_signal(self, sig_time, sig, TR):
+    def block_signal(self, sig_time, sig, time_pts):
         """
         Params:
             sigtime (iterable) = the sampling time points of sig
@@ -426,8 +324,8 @@ class peak_analysis:
         cpy = cpy.reset_index(drop=True)
         count = 0
         
-        if sig_time.max() < 10:
-            sig_time = sig_time * 60
+#        if sig_time.max() < 10:
+#            sig_time = sig_time * 60
 
         window_length = self.get_wlen(sig_time, cpy)
 
@@ -446,74 +344,19 @@ class peak_analysis:
         b, a = sg.butter(4, w, 'low', analog=False)
         filtered = sg.filtfilt(b, a, cpy)
 
-        # return filtered
-        signal_resampler = interp.interp1d(sig_time, filtered, fill_value='extrapolate')
-        signal_resampled = signal_resampler(np.arange(0,480,TR))
-
-        return signal_resampled
+        return pd.DataFrame({'Time' : sig_time,
+                             'Data' : filtered})
+#        signal_resampler = interp.interp1d(sig_time, filtered, fill_value='extrapolate')
+#        signal_resampled = signal_resampler(time_pts)
+#
+#        return signal_resampled
 
 class shifter:
     """
     docstring for shifter.
-    acknowledgements:
-    https://ws680.nist.gov/publication/get_pdf.cfm?pub_id=901379 (centroid analysis)
-
-    Prefer to use cross-correlaton over centroid
     """
 
-    def get_centroid(self, t_series, data_series, window_coeff, poly_order):
-        """
-        centroid is a signal weighted average of time. We are essentially calculating the temporal middle of the signal
-
-        params:
-            t_series (iterable) = time points of data_series
-            data_series (iterable) = the signal intensity series
-            window_coeff (int) = filter window size
-            poly_order (int) = the order of savgol fit polynomial
-
-        return:
-            (float)
-        """
-        #set buffer to 0
-        buffer = 0.0
-        #pack t_series and d_series together and calculate square weighted sum
-        for t, d in zip(t_series, sg.savgol_filter(data_series, window_coeff, poly_order)):
-            buffer += (d**2) * t
-        #return square weighted average
-        return buffer/(np.sum(data_series**2))
-
-    def align_centroid(self, base_time, base_sig, time1, sig1, time2, sig2):
-        """
-        aligns several (3) time series based on their relative temporal centroids
-
-        params:
-            base_time = BOLD
-            rest = self explanatory
-            *time* (iterable) = time points / sampling points
-            *sig* (iterable) = sampling intensity at each time/sampling points
-
-        warnings:
-            [*]sig[*] must have equal length to [*]time[*]
-
-        returns:
-            (dictionary) {base_time, base_sig, sig1, sig2}
-        """
-        #get all centroids
-        base_centroid = self.get_centroid(base_time, base_sig)
-        sig1_centroid = self.get_centroid(time1, sig1)
-        sig2_centroid = self.get_centroid(time2, sig2)
-
-        #shift times and construct interpolators
-        sig1_resampler = interp.interp1d(time1 - sig1_centroid + base_centroid, sig1)
-        sig2_resampler = interp.interp1d(time2 - sig2_centroid + base_centroid, sig2)
-
-        #interpolate signals
-        sig1_exact_aligned = sig1_resampler(base_time)
-        sig2_exact_aligned = sig2_resampler(base_time)
-
-        return {'base_time' : base_time, 'base_sig' : base_sig, 'sig1' : sig1_exact_aligned, 'sig2' : sig2_exact_aligned}
-
-    def get_cross_correlation(self, base, sig):
+    def get_cross_correlation(self, base, sig, scan_time):
         """
         Params:
             base (iterable) : reference signal (used to align signal)
@@ -522,15 +365,15 @@ class shifter:
         Returns:
             (float) : shift value of signal
         """
-        limit = int(10 * len(base)/480)
+        limit = int(10 * len(base)/scan_time)
         correlation_series = sg.correlate(base, sig)
-        correlation_series = correlation_series[len(correlation_series)//2 - limit:len(correlation_series)//2 + limit]
-
+        correlation_series = correlation_series[len(correlation_series)//2-limit : len(correlation_series)//2+limit+1]
+        
         shift_index = np.argmax(correlation_series) - (len(correlation_series)//2)
-        shift_value = 480/len(base) * shift_index
-        return shift_value
+        shift_value = scan_time/len(base) * shift_index
+        return shift_value, shift_index, correlation_series
 
-    def corr_align(self, base, other):
+    def corr_align(self, base, other_time, other_sig, scan_time, time_points):
         '''
         Parameters:
             base: numpy array
@@ -542,20 +385,23 @@ class shifter:
             shifted: numpy array
                 The shifted other signal
         '''
-        base_norm = sg.savgol_filter(base, 5, 3)
-        base_norm -= base_norm.mean()
+        base_norm = base - base.mean()
         base_norm /= base_norm.std()
 
-        other_norm = other - other.mean()
+        other_norm = other_sig - other_sig.mean()
         other_norm /= other_norm.std()
 
         #get shifts
-        shift = self.get_cross_correlation(base_norm, other_norm)
+        shift, start, corr = self.get_cross_correlation(base_norm, other_norm, scan_time)
         #construct resampler
-        resamp = interp.interp1d(np.linspace(0,480, len(base_norm))+shift, other, fill_value='extrapolate')
-        shifted = resamp(np.linspace(0, 480, len(base_norm)))
+        resamp = interp.interp1d(other_time+shift, other_sig, fill_value='extrapolate')
+        shifted = resamp(time_points)
+        if shift > 0:
+            shifted[:start] = other_sig[0]
 
-        return shifted
+        shifted = sg.savgol_filter(shifted, 11, 3)
+        
+        return shifted, corr
 
 class optimizer:
     """docstring for optimizer."""
@@ -679,7 +525,7 @@ class optimizer:
         B = B*factorB
         return return_tuple
 
-    def stochastic_optimize_GLM(self, S1, S2, B, init_tuple = (0,0,0), descent_speed=.1, lifespan = 100, p_factor = .9):
+    def stochastic_optimize_GLM(self, S1, S2, B, init_tuple = (0,0,0), descent_speed=.1, lifespan = 10000, p_factor = .9):
         """
         linear coefficient optimizer by stochastic gradient descent
 
@@ -726,3 +572,79 @@ class optimizer:
         S2 = S2*factor2
         B = B*factorB
         return return_tuple
+
+class parallel_processing:
+    
+    def kill_unending(self, processes, verb):
+        proc = subprocess.Popen("ps -e | grep flirt", encoding='utf-8', stdout=subprocess.PIPE, shell=True)
+
+        outs = proc.communicate()[0].split('\n')
+        for line in outs:
+            parts = line.split()
+            if len(parts) > 0:
+                time = parts[2].split(':')
+                secs = int(time[0])*3600 + int(time[1])*60 + int(time[2])
+                if secs > 900:
+                    os.kill(int(parts[0]), signal.SIGTERM)
+        
+        return
+    
+    def get_next_avail(self, processes, verb, limit, key, s_name):
+        msg = False
+        spin = '|/-\\'
+        cursor = 0
+        while not any(v is None for v in processes):
+            if verb:
+                if not msg:
+                    print('There are', limit, key, s_name, 'currently running. Limit reached. Waiting for at least one to end.')
+                    msg = True
+                else:
+                    sys.stdout.write(spin[cursor])
+                    sys.stdout.flush()
+                    cursor += 1
+                    if cursor >= len(spin):
+                        cursor = 0
+            
+            self.kill_unending(processes, verb)
+            
+            for i, process in enumerate(processes):
+                if process != None and process.poll() != None:
+                    processes[i] = None
+                    break
+                    
+            if verb:
+                if msg:
+                    time.sleep(0.2)
+                    sys.stdout.write('\b')
+        
+        return processes.index(None)
+    
+    def wait_remaining(self, processes, verb, key, s_name):
+        msg = False
+        spin = '|/-\\'
+        cursor = 0
+            
+        while not all(v is None for v in processes):
+            if verb:
+                if not msg:
+                    print('Waiting for the remaining', key, s_name, 'to finish')
+                    msg = True
+                else:
+                    sys.stdout.write(spin[cursor])
+                    sys.stdout.flush()
+                    cursor += 1
+                    if cursor >= len(spin):
+                        cursor = 0
+            
+            self.kill_unending(processes, verb)
+            
+            for i, process in enumerate(processes):
+                if process != None and process.poll() != None:
+                    processes[i] = None
+                        
+            if verb:
+                if msg:
+                    time.sleep(0.2)
+                    sys.stdout.write('\b')
+        
+        return
