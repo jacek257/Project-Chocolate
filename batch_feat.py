@@ -27,6 +27,7 @@ parser.add_argument("-f", "--fouier", action='store_true', help='switch analysis
 parser.add_argument("-b", "--block", action='store_true', help='switch analysis to block envelope')
 parser.add_argument("-t", "--CO2_trough", action='store_true', help='switch CO2 peak finding to troughs')
 parser.add_argument("-o", "--overwrite", action='store_true', help='overwrite existing processed gas data')
+parser.add_argument("-m", "--manual", action='store_true', help='switch analysis to manual')
 parser.add_argument("-w", "--wh", action='store_true', help='process WH cohort')
 
 
@@ -39,6 +40,7 @@ four = True if args.fouier else False
 trough = True if args.CO2_trough else False
 over = True if args.overwrite else False
 block = True if args.block else False
+man = True if args.manual else False
 wh = True if args.wh else False
 
 ###########set directories (TODO, automate)
@@ -59,6 +61,9 @@ feat_dir = '/media/ke/8tb_part2/FSL_work/feat/'
 cores = multiprocessing.cpu_count()
 limit = cores - 5 if cores > 8 else 1
 processes = [None] * limit
+
+warnings = {'ID' : [],
+            'warning' : []}
 
 # make sure the path ends with '/'
 if path[-1] != '/':
@@ -113,6 +118,10 @@ for i in range(len(p_df)):
         date = p_df.Date[i][-4:] + p_df.Date[i][:-4]
         patient_dir = glob.glob(nifti_dir + p_df.Cohort[i] + p_df.ID[i] + '*' + date)
         if len(patient_dir) == 0 or not os.path.exists(patient_dir[0] + '/BOLD/'):
+            
+            warnings['ID'].append(p_df.Cohort[i] + p_df.ID[i] + '_' + p_df.Date[i])
+            warnings['warning'].append('No BOLD folder')
+            
             nii_paths['BOLD_path'].append('')
             nii_paths['BOLD_corrected_path'].append('')
             nii_paths['T1_path'].append('')
@@ -140,6 +149,8 @@ for i in range(len(p_df)):
     nii_paths['boldFS_exists'].append(len(b_files) > 0 and len(fs_files)>0)
     
     if len(fs_files) == 0:
+        warnings['ID'].append(p_df.Cohort[i] + p_df.ID[i] + '_' + p_df.Date[i])
+        warnings['warning'].append('No FS_T1 file')
         if verb:
             print('\t\tNo corresponding FS_T1 file')
 
@@ -187,6 +198,9 @@ for i in range(len(p_df)):
                 print('\t\tNo meants. Creating meants')
             subprocess.run(['fslmeants', '-i', brain_path, '-o', meants_path])
     else:
+        warnings['ID'].append(p_df.Cohort[i] + p_df.ID[i] + '_' + p_df.Date[i])
+        warnings['warning'].append('No BOLD file')
+        
         nii_paths['Processed_path'].append('')
         nii_paths['BOLD_corrected_path'].append('')
         nii_paths['meants_path'].append('')
@@ -194,6 +208,7 @@ for i in range(len(p_df)):
             print('\t\tNo corresponding BOLD file')
     if verb:
         print('\tAll relavent files grabbed')
+        
 if verb:
     print('Concatenating patient dataframe with path dataframe')
 #append bold, FS paths, and conditional to p_df
@@ -256,37 +271,36 @@ stats_df = pd.DataFrame()
     # typ = 'block'
     # if typ:
 #for typ in ['four', 'peak', 'trough', 'block']:
-for typ in ['four', 'peak', 'trough']:
-    if typ == 'four':
-        four = True
-        trough = False
-        block = False
-    elif typ == 'trough':
-        four = False
-        trough = True
-        block = False
-    elif typ == 'block':
-        four = False
-        trough = False
-        block = True
-    else:
-        four = False
-        trough = False
-        block = False
+#for typ in ['four', 'peak', 'trough']:
+#    if typ == 'four':
+#        four = True
+#        trough = False
+#        block = False
+#    elif typ == 'trough':
+#        four = False
+#        trough = True
+#        block = False
+#    elif typ == 'block':
+#        four = False
+#        trough = False
+#        block = True
+#    else:
+#        four = False
+#        trough = False
+#        block = False
 
+if man:
     #generate cleaned data header
     if four:
         key = 'f_'
-    #        key = sm+'f_'
     elif trough:
         key = 't_'
-    #        key = sm+'t_'
     elif block:
         key = 'b_'
-    #        key = sm+'b_'
+    elif man:
+        key = 'm'
     else:
         key = 'p_'
-    #        key = sm+'p_'
     
     ET_dict = {'ETO2' : [], 'ETCO2' : [], 'ET_exists' : [], 'Cohort' : [], 'ID' : [], 'Date' : []}
     
@@ -345,9 +359,6 @@ for typ in ['four', 'peak', 'trough']:
     
         else:
             # need to scale CO2 data is necessary
-    #            print(endTidal)
-    #            print()
-            
             if endTidal.CO2.max() < 1:
                 endTidal.CO2 = endTidal.CO2 * 100
                 
@@ -356,23 +367,16 @@ for typ in ['four', 'peak', 'trough']:
             
             
             meants = signal.savgol_filter(meants, 11, 3)
-    
-    #            print(endTidal)
-    #            if pre:
             endTidal.CO2 = signal.savgol_filter(endTidal.CO2, 35, 3)
         
             endTidal = endTidal[endTidal.Time > 0.5].reset_index(drop=True)
             
 #            print(endTidal)
-            
-    #            interp_time = 480/(dim-3)
     
             if four:
                 if verb:
                     print('Starting fourier for', cohort + id + '_' + date)
                 #get fourier cleaned data
-    #                pre_O2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.O2, 3, 35, interp_time)
-    #                pre_CO2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.CO2, 3, 35, interp_time)
                 pre_O2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.O2, 2/60, 25/60, tr, time_pts)
                 pre_CO2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.CO2, 2/60, 25/60, tr, time_pts)
             elif block:
@@ -386,6 +390,10 @@ for typ in ['four', 'peak', 'trough']:
                     print('Starting troughs for', cohort + id + '_' + date)
                 pre_CO2, pre_O2 = analysis.peak_analysis().peak_four(endTidal, verb, f_path, tr, time_pts, trough=True)
             
+            elif man:
+                if verb:
+                    print('Starting manual for ', cohort + id + '_' + date)
+                pre_CO2, pre_O2 = analysis.peak_analysis().peak(endTidal, verb, f_path, time_pts)
             else:
                 if verb:
                     print('Starting peaks for', cohort + id + '_' + date)
@@ -480,7 +488,7 @@ for typ in ['four', 'peak', 'trough']:
         analysis.parallel_processing().wait_remaining(processes, verb, key, 'FEAT')
         
         # run featquery
-        for i in range(len(p_df)):
+        for i in range(len(df)):
             p_id = key+df.Cohort[i]+df.ID[i]+'_'+df.Date[i]
             feat_output_dir = feat_dir+p_id+'.feat/'
             
@@ -519,7 +527,9 @@ for typ in ['four', 'peak', 'trough']:
         analysis.parallel_processing().wait_remaining(processes, verb, key, 'featquery')
         
         # get the stats
-        for i in range(len(p_df)):        
+        for i in range(len(df)):        
+            add = True
+            
             output_dir = feat_dir+key+df.Cohort[i]+df.ID[i]+'_'+df.Date[i]
             feat_output_dir = output_dir+'.feat/'
             
@@ -539,9 +549,11 @@ for typ in ['four', 'peak', 'trough']:
                 cz1_final = pd.DataFrame(z1)
             
             except FileNotFoundError:
+                warnings['ID'].append(p_df.Cohort[i] + p_df.ID[i] + '_' + p_df.Date[i])
+                warnings['warning'].append('No cluster_zstat1.txt')
+                add = False
                 if verb:
-                    print('No O2 activation found')
-                continue
+                    print('No cluster_zstat1.txt')
             
             try:
                 cz2 = pd.read_csv(feat_output_dir+'cluster_zstat2.txt', sep='\t', usecols=['Voxels', '-log10(P)', 'Z-MAX', 'COPE-MEAN'])
@@ -559,9 +571,11 @@ for typ in ['four', 'peak', 'trough']:
                 cz2_final = pd.DataFrame(z2)
             
             except FileNotFoundError:
+                warnings['ID'].append(p_df.Cohort[i] + p_df.ID[i] + '_' + p_df.Date[i])
+                warnings['warning'].append('No cluster_zstat2.txt')
+                add = False
                 if verb:
-                    print('No CO2 activation found')
-                continue
+                    print('No cluster_zstat2.txt')
             
             build = cz1_final.merge(cz2_final, on=['ID', 'type'], suffixes=('_O2', '_CO2'))
             
@@ -577,9 +591,11 @@ for typ in ['four', 'peak', 'trough']:
                 fq1 = fq1[['ID', 'type', 'mean']]
                 build = build.merge(fq1, on=['ID', 'type'], suffixes=('_O2', '_CO2'))
             except FileNotFoundError:
+                warnings['ID'].append(p_df.Cohort[i] + p_df.ID[i] + '_' + p_df.Date[i])
+                warnings['warning'].append('No O2 activation found')
+                add = False
                 if verb:
                     print('No O2 activation found')
-                continue
             
                 
             CO2 = feat_output_dir+'fq_CO2/'
@@ -591,19 +607,25 @@ for typ in ['four', 'peak', 'trough']:
                 fq2 = fq2[['ID', 'type', 'mean']]
                 build = build.merge(fq2, on=['ID', 'type'], suffixes=('_O2', '_CO2'))
             except FileNotFoundError:
+                warnings['ID'].append(p_df.Cohort[i] + p_df.ID[i] + '_' + p_df.Date[i])
+                warnings['warning'].append('No CO2 activation found')
+                add = False
                 if verb:
                     print('No CO2 activation found')
-                continue
             
-            stats_df = pd.concat([stats_df, build])
+            if add:
+                stats_df = pd.concat([stats_df, build])
         
         if verb:
             print()
     
     stats_df.reset_index(drop=True)
 
+warnings_df = pd.DataFrame(warnings)
 
-stats_df.to_excel(path+'stats_data.xlsx', index=False)
+with pd.ExcelWriter(path+'stats_data.xlsx') as writer:  # doctest: +SKIP
+    stats_df.to_excel(writer, sheet_name='Stats', index=False)
+    warnings_df.to_excel(writer, sheet_name='Warnings', index=False)
 
 if verb:
     print('============== Script Finished ==============')

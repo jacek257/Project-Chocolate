@@ -239,17 +239,9 @@ class peak_analysis:
 
     def peak_four(self, df, verb, file, tr, time_pts, trough):
         
-        # set the size of the graphs
-        sns.set(rc={'figure.figsize':(20,10)})
-#        
-#        f_O2 = fft_analysis().fourier_filter_no_resample(df.Time, df.O2, 3, 35)
-#        f_CO2 = fft_analysis().fourier_filter_no_resample(df.Time, df.CO2, 3, 35)         
-        
         f_O2 = fft_analysis().fourier_filter(df.Time, df.O2, 2/60, 25/60, tr, time_pts)
         f_CO2 = fft_analysis().fourier_filter(df.Time, df.CO2, 2/60, 25/60, tr, time_pts)
         
-#        if df.Time.max() < 10:
-#            df.Time = df.Time * 60
 
         # get the troughs of the O2 data
         O2_data, _ = sg.find_peaks(df.O2.apply(lambda x:x*-1), prominence=2)
@@ -286,13 +278,110 @@ class peak_analysis:
         CO2_resamp = interp.interp1d(CO2_valid_df.Time, CO2_valid_df.CO2, fill_value='extrapolate')
         CO2_final_df = pd.DataFrame({'Time' : df.Time,
                                      'Data' : CO2_resamp(df.Time)})
-
-#        CO2_resamp = interp.interp1d(CO2_df.Time, CO2_df.CO2, fill_value='extrapolate')
-#        CO2_final = CO2_resamp(time_pts)
-#        O2_resamp = interp.interp1d(O2_df.Time, O2_df.O2, fill_value='extrapolate')
-#        O2_final = O2_resamp(time_pts)
-#
-#        return CO2_final, O2_final
+        return CO2_final_df, O2_final_df
+    
+    def peak(self, df, verb, file, time_points):
+        """
+        Get the peaks and troughs of CO2 and O2
+        
+        Parameters:
+            df: dataframe
+                data structure that holds the data
+            verb: boolean
+                flag for verbose output
+            file: string
+                file name to be displayed during verbose output
+            TR: float
+                repetition time, found in BOLD.json
+        
+        Returns:
+            et_O2: array-like
+                the end-tidal O2 data
+            et_CO2: array-like
+                the end-tidal CO2 data
+        """    
+        
+        # set the size of the graphs
+        sns.set(rc={'figure.figsize':(20,10)})
+        
+        # make loop for user confirmation that O2 peak detection is good
+        bad = True
+        prom = 2
+    
+        while bad:
+            # get the troughs of the O2 data
+            low_O2, _ = sg.find_peaks(df.O2.apply(lambda x:x*-1), prominence=prom)
+    
+            # create scatterplot of all O2 data
+            if verb:
+                print("Creating O2 plot ", file)
+            sns.lineplot(x='Time', y='O2', data=df, linewidth=1, color='b')
+    
+            # get the data points of peak
+            O2_df = df.iloc[low_O2]
+            
+            # linear interpolate the number of data points to match resample_ts
+            O2_fxn = interp.interp1d(O2_df.Time, O2_df.O2, fill_value='extrapolate')
+            O2_final_df = pd.DataFrame({'Time' : df.Time,
+                                        'Data' : O2_fxn(df.Time)})
+    
+            # add peak overlay onto the scatterplot
+            sns.lineplot(x=O2_final_df.Time, y=O2_final_df.Data, linewidth=2, color='g')
+            plt.show()
+            plt.close()
+    
+            # ask user if the peak finding was good
+            ans = input("Was the output good enough (y/n)? \nNote: anything not starting with 'y' is considered 'n'.\n")
+            bad = True if ans == '' or ans[0].lower() != 'y' else False
+            if bad:
+                print("The following variables can be changed: ")
+                print("    1. prominence - Required prominence of peaks. Type: int")
+                try:
+                    prom = int(input("New prominence (Default is 2): "))
+                except:
+                    print("Default value used")
+                    prom = 2
+    
+    
+        # make another loop for user confirmation that CO2 peak detection is good
+        bad = True
+        prom = 3
+        while bad:
+            # get peaks of the CO2 data
+            high_CO2, _ = sg.find_peaks(df.CO2, prominence=prom)
+    
+            # create scatter of all CO2 data
+            if verb:
+                print('Creating CO2 plot ', file)
+            sns.lineplot(x='Time', y='CO2', data=df, linewidth=1, color='b')
+    
+            # get the data points of peak
+            CO2_df = df.iloc[high_CO2]
+    
+            # linear interpolate the number of data points to match the scan Time
+            CO2_fxn = interp.interp1d(CO2_df.Time, CO2_df.CO2, fill_value='extrapolate')
+            CO2_final_df = pd.DataFrame({'Time' : df.Time,
+                                         'Data' : CO2_fxn(df.Time)})
+    
+            # add peak overlay onto the scatterplot
+            sns.lineplot(x=CO2_final_df.Time, y=CO2_final_df.Data, linewidth=2, color='r')
+            plt.show()
+            plt.close()
+    
+            # ask user if the peak finding was good
+            ans = input("Was the output good enough (y/n)? \nNote: anything not starting with 'y' is considered 'n'.\n")
+            bad = True if ans == '' or ans[0].lower() != 'y' else False
+            if bad:
+                print("The following variables can be changed: ")
+                print("    1. prominence - Required prominence of peaks. Type: int")
+                try:
+                    prom = int(input("New prominence (Default is 3): "))
+                except:
+                    print("Default value used")
+                    prom = 3
+                    
+        plt.close()
+        
         return CO2_final_df, O2_final_df
 
     def get_wlen(self, sig_time, sig):
