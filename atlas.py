@@ -52,7 +52,7 @@ else:
     processed_dir = '/media/ke/8tb_part2/FSL_work/WH_info/BOLD_processed'
     freesurfer_t1_dir = '/media/ke/8tb_part2/FSL_work/WH_FST1/'
     
-feat_dir = '/media/ke/8tb_part2/FSL_work/feat/'
+feat_dir = '/media/ke/8tb_part2/FSL_work/feat_test/'
     
 
 # set the limit for the number of processes (10 less that the total number of cores in the system) that can be run at once
@@ -82,20 +82,7 @@ for f in txt_files:
     p_dic['EndTidal_Path'].append(path+f)
 
 p_df = pd.DataFrame(p_dic)
-#p_df = pd.DataFrame({
-#                'Cohort':[f[0:2] for f in txt_files],
-#                'ID':[f[3:6] for f in txt_files],
-#                'Month':[f[11:13] for f in txt_files],
-#                'Day':[f[13:15] for f in txt_files],
-#                'Year':[f[7:11] for f in txt_files],
-#                'EndTidal_Path': [path+f for f in txt_files]
-#             })
 
-
-#print(p_df.head())
-#create patient bold scan listdir (is a list not DataFrame)
-#patient_BOLDS_header = [p_df.Cohort[i]+p_df.ID[i]+'_BOLD_'+p_df.Year[i]+p_df.Month[i]+p_df.Day[i]
-#                    for i in range(len(p_df))]
 patient_BOLDS_header = [p_df.Cohort[i]+p_df.ID[i]+'_BOLD_'+p_df.Date[i]
                     for i in range(len(p_df))]
 
@@ -243,19 +230,6 @@ for i in range(len(warning)):
 
 stats_df = pd.DataFrame()
 
-#for smoothing in ['none', 'pre', 'post']:
-#for smoothing in ['no', 'pre']:
-#    if smoothing == 'pre':
-#        pre = True
-#        post = False
-#        sm = 'pre_'
-#    else:
-#        pre = False
-#        post = False
-#        sm = "no_"
-    # typ = 'block'
-    # if typ:
-#for typ in ['four', 'peak', 'trough', 'block']:
 for typ in ['four', 'peak', 'trough']:
     if typ == 'four':
         four = True
@@ -334,81 +308,15 @@ for typ in ['four', 'peak', 'trough']:
         save_CO2 = f_path[:-4]+'/'+key+'CO2_contrast.txt'
     
         #check if the save_files already exist
-        if(os.path.exists(save_O2) and os.path.exists(save_CO2) and not over):
-            if(verb):
-                print('\tID: ', cohort + id + '_' + date," \tProcessed gas files already exist")
-            ET_dict['ETO2'].append(save_O2)
-            ET_dict['ETCO2'].append(save_CO2)
-            ET_dict['ET_exists'].append(True)
-            processed_O2 = np.loadtxt(save_O2)
-            processed_CO2 = np.loadtxt(save_CO2)
-    
-        else:
-            # need to scale CO2 data is necessary
-    #            print(endTidal)
-    #            print()
-            
-            if endTidal.CO2.max() < 1:
-                endTidal.CO2 = endTidal.CO2 * 100
-                
-            if endTidal.Time.max() < 20:
-                endTidal.Time = endTidal.Time * 60
-            
-            
-            meants = signal.savgol_filter(meants, 11, 3)
-    
-    #            print(endTidal)
-    #            if pre:
-            endTidal.CO2 = signal.savgol_filter(endTidal.CO2, 35, 3)
-        
-            endTidal = endTidal[endTidal.Time > 0.5].reset_index(drop=True)
-            
-#            print(endTidal)
-            
-    #            interp_time = 480/(dim-3)
-    
-            if four:
-                if verb:
-                    print('Starting fourier for', cohort + id + '_' + date)
-                #get fourier cleaned data
-    #                pre_O2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.O2, 3, 35, interp_time)
-    #                pre_CO2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.CO2, 3, 35, interp_time)
-                pre_O2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.O2, 2/60, 25/60, tr, time_pts)
-                pre_CO2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.CO2, 2/60, 25/60, tr, time_pts)
-            elif block:
-                if verb:
-                    print('Starting block for', cohort + id + '_' + date)
-                pre_O2 = analysis.peak_analysis().block_signal(endTidal.Time, endTidal.O2.apply(lambda x:x*-1), time_pts)*-1
-                pre_CO2 = analysis.peak_analysis().block_signal(endTidal.Time, endTidal.CO2, time_pts)
-    
-            elif trough:
-                if verb:
-                    print('Starting troughs for', cohort + id + '_' + date)
-                pre_CO2, pre_O2 = analysis.peak_analysis().peak_four(endTidal, verb, f_path, tr, time_pts, trough=True)
-            
-            else:
-                if verb:
-                    print('Starting peaks for', cohort + id + '_' + date)
-                pre_CO2, pre_O2 = analysis.peak_analysis().peak_four(endTidal, verb, f_path, tr, time_pts, trough=False)
-    
-            # get shifted O2 and CO2
-            processed_O2, O2_corr = analysis.shifter().corr_align(meants, pre_O2.Time, pre_O2.Data, scan_time, time_pts)
-            processed_CO2, CO2_corr = analysis.shifter().corr_align(meants, pre_CO2.Time, pre_CO2.Data, scan_time, time_pts)
-            #storing cleaned data paths
-            ET_dict['ETO2'].append(save_O2)
-            ET_dict['ETCO2'].append(save_CO2)
-            ET_dict['ET_exists'].append(True)
-    
-            #save data
-            np.savetxt(save_O2, processed_O2, delimiter='\t')
-            np.savetxt(save_CO2, processed_CO2, delimiter='\t')
-    
-            # save and create plots (shifts)
-            analysis.stat_utils().save_plots(df=endTidal, O2_time=pre_O2.Time, O2=pre_O2.Data, O2_shift=processed_O2, O2_correlation=O2_corr,
-                                             CO2_time=pre_CO2.Time, CO2=pre_CO2.Data, CO2_shift=processed_CO2, meants=meants, CO2_correlation=CO2_corr,
-                                             f_path=f_path, key=key, verb=verb, time_points=time_pts, TR=tr)
-            # analysis.stat_utils().save_plots(df=endTidal, O2=pre_O2, O2_shift=processed_O2, CO2=pre_CO2, CO2_shift=processed_CO2, meants=meants, f_path=graphs_dir+id, key=key, verb=verb, TR=interp_time)
-    
+        if(verb):
+            print('\tID: ', cohort + id + '_' + date," \t Grabbing atlas")
+        ET_dict['ETO2'].append(save_O2)
+        ET_dict['ETCO2'].append(save_CO2)
+        ET_dict['ET_exists'].append(True)
+        processed_O2 = np.loadtxt(save_O2)
+        processed_O2 = signal.resample(processed_O2, len(meants))
+        processed_CO2 = np.loadtxt(save_CO2)
+        processed_CO2 = signal.resample(processed_CO2, len(meants))
     
     if verb:
         print()
@@ -607,30 +515,3 @@ stats_df.to_excel(path+'stats_data.xlsx', index=False)
 
 if verb:
     print('============== Script Finished ==============')
-
-
-
-
-
-#
-#    
-#                msg = False
-#                spin = '|/-\\'
-#                cursor = 0
-#                if verb:
-#                    print('Starting FEAT')
-#                process = subprocess.Popen(['feat', ds_path])
-#                time.sleep(0.4)
-#                
-#                if verb:
-#                    while(process.poll() == None):
-#                        sys.stdout.write(spin[cursor])
-#                        sys.stdout.flush()
-#                        cursor += 1
-#                        if cursor >= len(spin):
-#                            cursor = 0
-#                        time.sleep(0.2)
-#                        sys.stdout.write('\b')
-#                else:
-#                    while(process.poll() == None):
-#                        time.sleep(0.1)

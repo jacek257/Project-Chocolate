@@ -245,8 +245,8 @@ class peak_analysis:
 #        f_O2 = fft_analysis().fourier_filter_no_resample(df.Time, df.O2, 3, 35)
 #        f_CO2 = fft_analysis().fourier_filter_no_resample(df.Time, df.CO2, 3, 35)         
         
-        f_O2 = fft_analysis().fourier_filter(df.Time, df.O2, 7/60, 25/60, tr, time_pts)
-        f_CO2 = fft_analysis().fourier_filter(df.Time, df.CO2, 7/60, 25/60, tr, time_pts)
+        f_O2 = fft_analysis().fourier_filter(df.Time, df.O2, 2/60, 25/60, tr, time_pts)
+        f_CO2 = fft_analysis().fourier_filter(df.Time, df.CO2, 2/60, 25/60, tr, time_pts)
         
 #        if df.Time.max() < 10:
 #            df.Time = df.Time * 60
@@ -267,7 +267,7 @@ class peak_analysis:
                                     'Data' : O2_resamp(df.Time)})
         
         if trough:
-            CO2_data, _ = sg.find_peaks(df.CO2.apply(lambda x:x*-1), prominence=3)
+            CO2_data, _ = sg.find_peaks(df.CO2.apply(lambda x:x*-1), prominence=4)
         else:
             CO2_data, _ = sg.find_peaks(df.CO2, prominence=3) 
         
