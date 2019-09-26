@@ -74,13 +74,21 @@ class fft_analysis:
         freq, power, disp = self.fourier_trans(max(time_series)/len(time_series), data)
         pre_invert = self.my_filter(low_f,high_f, freq, power)
         inverted = ifft(pre_invert).real
-
-#        resample_ts = time_points
-#        resampler = interp.interp1d(time_series, inverted, fill_value="extrapolate")
         
-        return pd.DataFrame({'Time' : time_series,
-                             'Data' : inverted})
-#                             'Data' : resampler(time_series)})
+
+        resample_ts = np.arange(time_series.min(), time_series.max(), tr)
+        resampler = interp.interp1d(time_series, inverted, fill_value="extrapolate")
+        
+#        df = pd.DataFrame({'Time' : time_series,
+#                           'Data' : inverted})
+    
+        df = pd.DataFrame({'Time' : resample_ts,
+                           'Data' : resampler(resample_ts)})
+        
+        df = df[df.Time > 5].reset_index(drop=True)
+        df = df[df.Time < df.Time.max()-5].reset_index(drop=True)
+        
+        return df
 
 
     def fourier_filter_no_resample(self, time_series, data, low_f, high_f):
@@ -239,9 +247,10 @@ class peak_analysis:
 
     def peak_four(self, df, verb, file, tr, time_pts, trough):
         
-        f_O2 = fft_analysis().fourier_filter(df.Time, df.O2, 2/60, 25/60, tr, time_pts)
-        f_CO2 = fft_analysis().fourier_filter(df.Time, df.CO2, 2/60, 25/60, tr, time_pts)
+        f_O2 = fft_analysis().fourier_filter_no_resample(df.Time, df.O2, 2/60, 25/60)
+        f_CO2 = fft_analysis().fourier_filter_no_resample(df.Time, df.CO2, 2/60, 25/60)
         
+        resamp_tp = np.arange(0, df.Time.max(), tr)
 
         # get the troughs of the O2 data
         O2_data, _ = sg.find_peaks(df.O2.apply(lambda x:x*-1), prominence=2)
@@ -254,12 +263,22 @@ class peak_analysis:
         O2_df['cmp'] = O2_df.O2 < f_O2_final
         
         O2_valid_df = O2_df[O2_df.cmp == True]
+        
+        O2_valid_df = O2_valid_df[O2_valid_df.Time > 5].reset_index(drop=True)
+        O2_valid_df = O2_valid_df[O2_valid_df.Time < O2_valid_df.Time.max()-5].reset_index(drop=True)
+#        O2_valid_df.O2 = sg.savgol_filter(O2_valid_df.O2, 3, 2)
+        
         O2_resamp = interp.interp1d(O2_valid_df.Time, O2_valid_df.O2, fill_value='extrapolate')
-        O2_final_df = pd.DataFrame({'Time' : df.Time,
-                                    'Data' : O2_resamp(df.Time)})
+        O2_final_df = pd.DataFrame({'Time' : resamp_tp,
+                                    'Data' : O2_resamp(resamp_tp)})
+        
+        O2_final_df = self._trim_edges(O2_final_df)
+        
+#        sns.lineplot(data=O2_final_df.Data)
+#        plt.show()
         
         if trough:
-            CO2_data, _ = sg.find_peaks(df.CO2.apply(lambda x:x*-1), prominence=4)
+            CO2_data, _ = sg.find_peaks(df.CO2.apply(lambda x:x*-1), prominence=3)
         else:
             CO2_data, _ = sg.find_peaks(df.CO2, prominence=3) 
         
@@ -275,10 +294,49 @@ class peak_analysis:
             CO2_df['cmp'] = CO2_df.CO2 > f_CO2_final
         
         CO2_valid_df = CO2_df[CO2_df.cmp == True].reset_index(drop=True)
+        
+        CO2_valid_df = CO2_valid_df[CO2_valid_df.Time > 5].reset_index(drop=True)
+        CO2_valid_df = CO2_valid_df[CO2_valid_df.Time < CO2_valid_df.Time.max()-5].reset_index(drop=True)
+#        CO2_valid_df.CO2 = sg.savgol_filter(CO2_valid_df.CO2, 3, 2)
+        
         CO2_resamp = interp.interp1d(CO2_valid_df.Time, CO2_valid_df.CO2, fill_value='extrapolate')
-        CO2_final_df = pd.DataFrame({'Time' : df.Time,
-                                     'Data' : CO2_resamp(df.Time)})
+        CO2_final_df = pd.DataFrame({'Time' : resamp_tp,
+                                     'Data' : CO2_resamp(resamp_tp)})
+        
+        CO2_final_df = self._trim_edges(CO2_final_df)
+        
+#        sns.lineplot(data=CO2_final_df.Data)
+#        plt.show()
+    
         return CO2_final_df, O2_final_df
+    
+    def _trim_edges(self, df):
+        
+        i = len(df)-1
+        count = 1
+        change = abs((df.Data[i-1] - df.Data[i]))
+#        print(slope)
+        delete = False
+        i -= 1
+        
+#        print(change)
+        while(df.Time[i] > df.Time.max()*0.9):
+            pre_change = change
+            change = abs((df.Data[i-1] - df.Data[i]))
+            diff = abs(change-pre_change)
+#            print(diff)
+            if diff > 0 and diff < 5e-2:
+                count += 1
+                i -= 1
+                if count > 5:
+                    delete = True
+            else:
+                break
+        
+        if delete == True:
+            df.Data[len(df)-count:] = df.Data[len(df)-count]
+        
+        return df
     
     def peak(self, df, verb, file, time_points):
         """
@@ -454,9 +512,9 @@ class shifter:
         Returns:
             (float) : shift value of signal
         """
-        limit = int(10 * len(base)/scan_time)
+        limit = int(15 * len(base)/scan_time)
         correlation_series = sg.correlate(base, sig)
-        correlation_series = correlation_series[len(correlation_series)//2-limit : len(correlation_series)//2+limit+1]
+#        correlation_series = correlation_series[len(correlation_series)//2-limit : len(correlation_series)//2+limit+1]
         
         shift_index = np.argmax(correlation_series) - (len(correlation_series)//2)
         shift_value = scan_time/len(base) * shift_index
@@ -474,23 +532,80 @@ class shifter:
             shifted: numpy array
                 The shifted other signal
         '''
+#        shift, start, corr = self.get_cross_correlation(base, other_sig, scan_time)
         base_norm = base - base.mean()
-        base_norm /= base_norm.std()
+#        base_norm /= base_norm.std()
 
         other_norm = other_sig - other_sig.mean()
-        other_norm /= other_norm.std()
+#        other_norm /= other_norm.std()
+        
+#        print(len(base_norm))
+#        print(len(other_norm))
+        
+#        _, gd= sg.group_delay((base_norm, other_norm))
+#        print(gd)
+#        print(len(gd))
+        
+#        other_norm= sg.savgol_filter(other_norm, 35, 3)
+        
+#        plt.plot(other_norm)
+#        plt.show()
+#        
+#        other_sep = len(other_norm)//4
+#        left_edge = np.argmax(other_norm[:other_sep])
+##        print(left_edge)
+#        right_edge = np.argmax(other_norm[other_sep*3:])+other_sep*3
+##        print(right_edge)
+#        other_norm = other_norm[left_edge:right_edge]
+#        
+#        base_sep = len(base_norm)//4
+#        left_edge = np.argmax(base_norm[:base_sep])
+##        print(left_edge)
+#        right_edge = np.argmax(base_norm[base_sep*3:])+base_sep*3
+##        print(right_edge)
+#        base_norm = base_norm[left_edge:right_edge]
+        
+#        plt.plot(other_norm)
+#        plt.show()
 
         #get shifts
+#        print(len(other_sig))
+#        print(len(base))
+        
         shift, start, corr = self.get_cross_correlation(base_norm, other_norm, scan_time)
+#        print(corr)
+#        print(corr[len(corr)//2])
         #construct resampler
+#        print(shift, start)
+#        exit()
         resamp = interp.interp1d(other_time+shift, other_sig, fill_value='extrapolate')
         shifted = resamp(time_points)
-        if shift > 0:
-            shifted[:start] = other_sig[0]
-
-        shifted = sg.savgol_filter(shifted, 11, 3)
         
-        return shifted, corr
+#        if shift > 0:
+#            prepend = [other_sig.iloc[0]] * start
+#            prepend.append(other_sig)
+#            final = prepend[:-start]
+#        if shift < 0:
+#            other_sig = other_sig[-start:]
+#            print(-start)
+#            append = [other_sig.iloc[-1]] * -start
+#            final = other_sig.append(append)
+#        
+#        end = len(final) - len(time_points)
+#        final = final[:-end]
+#        
+#        df = pd.DataFrame({ 'Time' : time_points,
+#                            'Data' : final,
+#                            'BOLD' : base})
+        
+        df = pd.DataFrame({ 'Time' : time_points,
+                            'Data' : shifted,
+                            'BOLD' : base})
+
+#        shifted = sg.savgol_filter(shifted, 11, 3)
+        
+        return df, shifted, corr, shift
+#        return df, df.Data, corr
 
 class optimizer:
     """docstring for optimizer."""

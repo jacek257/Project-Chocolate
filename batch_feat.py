@@ -14,6 +14,9 @@ from scipy import signal
 import time
 import glob
 import multiprocessing
+import matplotlib.pyplot as plt
+import seaborn as sns
+import scipy.stats as st
 
 # instantiate the argument parser
 parser = argparse.ArgumentParser()
@@ -271,25 +274,26 @@ stats_df = pd.DataFrame()
     # typ = 'block'
     # if typ:
 #for typ in ['four', 'peak', 'trough', 'block']:
-#for typ in ['four', 'peak', 'trough']:
-#    if typ == 'four':
-#        four = True
-#        trough = False
-#        block = False
-#    elif typ == 'trough':
-#        four = False
-#        trough = True
-#        block = False
-#    elif typ == 'block':
-#        four = False
-#        trough = False
-#        block = True
-#    else:
-#        four = False
-#        trough = False
-#        block = False
+for typ in ['four', 'peak', 'trough']:
+#for typ in ['peak', 'trough']:
+    if typ == 'four':
+        four = True
+        trough = False
+        block = False
+    elif typ == 'trough':
+        four = False
+        trough = True
+        block = False
+    elif typ == 'block':
+        four = False
+        trough = False
+        block = True
+    else:
+        four = False
+        trough = False
+        block = False
 
-if man:
+#if man:
     #generate cleaned data header
     if four:
         key = 'f_'
@@ -302,7 +306,7 @@ if man:
     else:
         key = 'p_'
     
-    ET_dict = {'ETO2' : [], 'ETCO2' : [], 'ET_exists' : [], 'Cohort' : [], 'ID' : [], 'Date' : []}
+    ET_dict = {'ETO2' : [], 'ETCO2' : [], 'ET_exists' : [], 'Cohort' : [], 'ID' : [], 'Date' : [], 'O2_shift' : [], 'CO2_shift' : []}
     
     to_drop = []
     
@@ -341,6 +345,7 @@ if man:
         scan_time = (vol-3) * tr
     
         meants = np.loadtxt(meants_path, delimiter='\n')[3:]
+        meants = signal.detrend(meants)
         time_pts = np.arange(0, scan_time, tr)
     
         #generate cleaned data paths
@@ -365,11 +370,9 @@ if man:
             if endTidal.Time.max() < 20:
                 endTidal.Time = endTidal.Time * 60
             
+#            meants = signal.savgol_filter(meants, 11, 3)
             
-            meants = signal.savgol_filter(meants, 11, 3)
-            endTidal.CO2 = signal.savgol_filter(endTidal.CO2, 35, 3)
-        
-            endTidal = endTidal[endTidal.Time > 0.5].reset_index(drop=True)
+#            endTidal.CO2 = signal.savgol_filter(endTidal.CO2, 35, 3)
             
 #            print(endTidal)
     
@@ -400,13 +403,36 @@ if man:
                 pre_CO2, pre_O2 = analysis.peak_analysis().peak_four(endTidal, verb, f_path, tr, time_pts, trough=False)
     
             # get shifted O2 and CO2
-            processed_O2, O2_corr = analysis.shifter().corr_align(meants, pre_O2.Time, pre_O2.Data, scan_time, time_pts)
-            processed_CO2, CO2_corr = analysis.shifter().corr_align(meants, pre_CO2.Time, pre_CO2.Data, scan_time, time_pts)
+            all_CO2 = pre_CO2.merge(pd.DataFrame({'Time' : time_pts, 'meants' : meants}), on=['Time'], how='inner')
+            all_CO2.Data -= all_CO2.Data.mean()
+            all_CO2.Data /- all_CO2.Data.std()
+            
+            all_CO2.meants -= all_CO2.meants.mean()
+            all_CO2.meants /- all_CO2.meants.std()
+            
+            
+#            r2 = st.pearsonr(all_CO2.meants , all_CO2.Data)
+#            print(r2)
+#            corr = signal.correlate(all_CO2.meants, all_CO2.Data)
+#            plt.plot(corr/corr.std())
+#            plt.show()
+        
+#            sns.lineplot(x='Time', y='Data', data=all_CO2)
+#            sns.lineplot(x='Time', y='meants', data=all_CO2)
+#            plt.show()
+#            exit()
+            full_O2, processed_O2, O2_corr, O2_shift = analysis.shifter().corr_align(meants, pre_O2.Time, pre_O2.Data, scan_time, time_pts)
+            ET_dict['O2_shift'].append(O2_shift)
+            full_CO2, processed_CO2, CO2_corr, CO2_shift = analysis.shifter().corr_align(meants, pre_CO2.Time, pre_CO2.Data, scan_time, time_pts)
+            ET_dict['CO2_shift'].append(CO2_shift)
             #storing cleaned data paths
             ET_dict['ETO2'].append(save_O2)
             ET_dict['ETCO2'].append(save_CO2)
             ET_dict['ET_exists'].append(True)
     
+            processed_O2 = signal.savgol_filter(processed_O2, 11, 3)
+            processed_CO2 = signal.savgol_filter(processed_CO2, 11, 3)
+            
             #save data
             np.savetxt(save_O2, processed_O2, delimiter='\t')
             np.savetxt(save_CO2, processed_CO2, delimiter='\t')
@@ -624,35 +650,10 @@ if man:
 warnings_df = pd.DataFrame(warnings)
 
 with pd.ExcelWriter(path+'stats_data.xlsx') as writer:  # doctest: +SKIP
-    stats_df.to_excel(writer, sheet_name='Stats', index=False)
+#    stats_df.to_excel(writer, sheet_name='Stats', index=False)
     warnings_df.to_excel(writer, sheet_name='Warnings', index=False)
 
 if verb:
     print('============== Script Finished ==============')
 
 
-
-
-
-#
-#    
-#                msg = False
-#                spin = '|/-\\'
-#                cursor = 0
-#                if verb:
-#                    print('Starting FEAT')
-#                process = subprocess.Popen(['feat', ds_path])
-#                time.sleep(0.4)
-#                
-#                if verb:
-#                    while(process.poll() == None):
-#                        sys.stdout.write(spin[cursor])
-#                        sys.stdout.flush()
-#                        cursor += 1
-#                        if cursor >= len(spin):
-#                            cursor = 0
-#                        time.sleep(0.2)
-#                        sys.stdout.write('\b')
-#                else:
-#                    while(process.poll() == None):
-#                        time.sleep(0.1)
