@@ -14,11 +14,14 @@ import time
 import subprocess
 import os
 import signal
+from sklearn.linear_model import SGDRegressor as SGD
+from sklearn.linear_model import Ridge
+from scipy import stats
 
 class fft_analysis:
     """docstring for fft_analysis."""
 
-    def fourier_trans(self, spacing, data):
+    def fourier_trans(self, time_series, data, N):
         """
         returns a tuple: (frequency domain, Power spectra, abs(power_spectra))
 
@@ -26,8 +29,7 @@ class fft_analysis:
         data = series to be analyzed
         """
 
-        N = len(data)
-
+        spacing = time_series.max()/N
         #create freq_dom from timestep
         freq_dom = np.linspace(0, 1/(2*spacing), N)
         #perform fft
@@ -35,6 +37,7 @@ class fft_analysis:
         #abs(fft) cut in half
         plottable_spectra = (2/N * np.abs(power_spectra))[:N//2]
         return (freq_dom,power_spectra,plottable_spectra)
+
 
     def my_filter(self, f_low, f_high, freq_dom, power_spectra):
         """
@@ -65,13 +68,10 @@ class fft_analysis:
         high_f = upper frequency bound
         TR = repetition time: found in BOLD .json
         """
-#
-#        if(time_series.max()<10):
-#             time_series = time_series*60
-#        else:
-#             time_series = time_series
         
-        freq, power, disp = self.fourier_trans(max(time_series)/len(time_series), data)
+        N = len(data)
+        freq, power, disp = self.fourier_trans(time_series, data, N)
+        
         pre_invert = self.my_filter(low_f,high_f, freq, power)
         inverted = ifft(pre_invert).real
         
@@ -85,8 +85,10 @@ class fft_analysis:
         df = pd.DataFrame({'Time' : resample_ts,
                            'Data' : resampler(resample_ts)})
         
-        df = df[df.Time > 5].reset_index(drop=True)
-        df = df[df.Time < df.Time.max()-5].reset_index(drop=True)
+        df = stat_utils().trim_edges(df)
+        
+#        df = df[df.Time > 5].reset_index(drop=True)
+#        df = df[df.Time < df.Time.max()-5].reset_index(drop=True)
         
         return df
 
@@ -109,7 +111,10 @@ class fft_analysis:
 class stat_utils:
     """docstring for stat_utils."""
 
-    def save_plots(self, df, O2_time, O2, O2_shift, O2_correlation, CO2_time, CO2, CO2_shift, CO2_correlation, meants, f_path, key, verb, time_points, TR):
+    def save_plots(self, df, O2_time, O2, O2_shift, O2_correlation, O2_shift_f,
+                   CO2_time, CO2, CO2_shift, CO2_correlation, CO2_shift_f, meants,
+                   coeff, coeff_f, comb_corr,
+                   f_path, key, verb, time_points, TR):
         """
         Create and saves plots for CO2 and O2 data
 
@@ -143,21 +148,35 @@ class stat_utils:
 
         # set the size of the graphs
         sns.set(rc={'figure.figsize':(60,20)})
+        plt.rc('legend', fontsize='x-large')
+        plt.rc('xtick', labelsize='x-large')
+        plt.rc('axes', titlesize='x-large')
 
         # normalize data
-        meants_norm = meants - meants.mean()
+        meants_norm = sg.detrend(meants)
+#        meants_norm = meants - meants.mean()
         meants_norm /= meants_norm.std()
 
-        CO2_norm = CO2 - CO2.mean()
-        CO2_norm /= CO2.std()
+#        df.CO2 = sg.detrend(df.CO2)
+#        df.CO2 /= df.CO2.std()
 
-        CO2_shift_norm = CO2_shift - CO2_shift.mean()
+        CO2_norm = sg.detrend(CO2)
+#        CO2_norm = CO2 - CO2.mean()
+        CO2_norm /= CO2_norm.std()
+
+        CO2_shift_norm = sg.detrend(CO2_shift)
+#        CO2_shift_norm = CO2_shift - CO2_shift.mean()
         CO2_shift_norm /= CO2_shift_norm.std()
 
-        O2_norm = O2 - O2.mean()
-        O2_norm /= O2.std()
+#        df.O2 = sg.detrend(df.O2)
+#        df.O2 /= df.O2.std()
+        
+        O2_norm = sg.detrend(O2)
+#        O2_norm = O2 - O2.mean()
+        O2_norm /= O2_norm.std()
 
-        O2_shift_norm = O2_shift - O2_shift.mean()
+        O2_shift_norm = sg.detrend(O2_shift)
+#        O2_shift_norm = O2_shift - O2_shift.mean()
         O2_shift_norm /= O2_shift_norm.std()
 
 
@@ -171,14 +190,22 @@ class stat_utils:
 
         sns.lineplot(x='Time', y='O2', data=df, linewidth=1, color='b', ax=axes[0, 0])
         sns.lineplot(x=O2_time, y=O2, linewidth=2, color='g', ax=axes[0, 0])
+        axes[0,0].set_title('Processed vs Raw')
+        axes[0,0].legend(['Raw', 'Processed'], facecolor='w')
 
         sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0,1])
         sns.lineplot(x=O2_time, y=O2_norm, color='g', ax=axes[0,1])
+        axes[0,1].set_title('Processed vs BOLD')
+        axes[0,1].legend(['BOLD', 'Processed'], facecolor='w')
         
         sns.lineplot(x=np.arange(-len(O2_correlation)//2, len(O2_correlation)//2)+1, y=O2_correlation, ax=axes[1,0])
+        axes[1,0].set_title('Cross-Correlation')
+        axes[1,0].legend(['Cross-Correlation'], facecolor='w')
 
         sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1,1])
         sns.lineplot(x=time_points, y=O2_shift_norm, color='g', ax=axes[1,1])
+        axes[1,1].set_title('Shifted vs BOLD')
+        axes[1,1].legend(['BOLD', 'Shifted'], facecolor='w')
 
         # save the plot
         if verb:
@@ -199,14 +226,22 @@ class stat_utils:
 
         sns.lineplot(x='Time', y='CO2', data=df, linewidth=1, color='b', ax=axes[0, 0])
         sns.lineplot(x=O2_time, y=CO2, linewidth=2, color='r', ax=axes[0, 0])
+        axes[0,0].set_title('Processed vs Raw')
+        axes[0,0].legend(['Raw', 'Processed'], facecolor='w')
 
         sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0,1])
         sns.lineplot(x=CO2_time, y=CO2_norm, color='r', ax=axes[0,1])
+        axes[0,1].set_title('Processed vs BOLD')
+        axes[0,1].legend(['BOLD', 'Processed'], facecolor='w')
         
         sns.lineplot(x=np.arange(-len(CO2_correlation)//2, len(CO2_correlation)//2)+1, y=CO2_correlation, ax=axes[1,0])
+        axes[1,0].set_title('Cross-Correlation')
+        axes[1,0].legend(['Cross-Correlation'], facecolor='w')
 
         sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1,1])
         sns.lineplot(x=time_points, y=CO2_shift_norm, color='r', ax=axes[1,1])
+        axes[1,1].set_title('Shifted vs BOLD')
+        axes[1,1].legend(['BOLD', 'Shifted'], facecolor='w')
 
         # save the plot
         if verb:
@@ -219,28 +254,189 @@ class stat_utils:
 #        plt.show()
         f.clf()
         plt.close(fig=f)
+        
+        if verb:
+            print('Creating regression plot')
+        
+        sns.set(rc={'figure.figsize':(30,20)})
+#        sns.lineplot(x=time_points, y=meants_norm, color='blue', ax=axes[0])
+#        predict = coeff[0]*O2_shift + coeff[1]*CO2_shift + coeff[2]
+#        predict_norm = sg.detrend(predict)
+#        predict_norm /= predict_norm.std()
+#        sns.lineplot(x=time_points, y=predict_norm, color='violet', ax=axes[0])
+        
+        f, axes = plt.subplots(3, 1)
+        
+        sns.lineplot(x=time_points, y=meants_norm, color='blue', ax=axes[0])
+        predict = coeff[0]*O2_shift + coeff[1]*CO2_shift + coeff[2]
+        predict_norm = sg.detrend(predict)
+        predict_norm /= predict_norm.std()
+        sns.lineplot(x=time_points, y=predict_norm, color='violet', ax=axes[0])
+        axes[0].set_title('First-shift vs BOLD')
+        axes[0].legend(['BOLD', 'First-shift'], facecolor='w')
+        
+        sns.lineplot(x=np.arange(-len(comb_corr)//2, len(comb_corr)//2)+1, y=comb_corr, ax=axes[1])
+        axes[1].set_title('Cross-Correlation')
+        axes[1].legend(['Cross-Correlation'], facecolor='w')
 
-    def get_r2(self, sig_fit, sig_obs):
-        """
-        gets r^2 (coefficient of determination) of sig_fit w.r.t. sig_obs
+        sns.lineplot(x=time_points, y=meants_norm, color='blue', ax=axes[2])
+        predict = coeff_f[0]*O2_shift_f + coeff_f[1]*CO2_shift_f + coeff_f[2]
+        predict_norm = sg.detrend(predict)
+        predict_norm /= predict_norm.std()
+        sns.lineplot(x=time_points, y=predict_norm, color='violet', ax=axes[2])
+        axes[2].set_title('Second-shift vs BOLD')
+        axes[2].legend(['BOLD', 'Second-shift'], facecolor='w')
 
-        inputs:
-            sig_fit (iterable) = fitted/predicted signal
-            sig_obs (iterable) = observed signal / raw data
+        if verb:
+            print('Saving regression plot for', f_path)
 
-        warnings:
-            sig's must have the same lengths
+        save_path = save_path = f_path[:-4]+'/' + key + 'regression.png'
+        plt.savefig(save_path)
+        if verb:
+            print('Saving complete')
+#        plt.show()
+        f.clf()
+        plt.close(fig=f)
+        
+        return
+    
+    def get_info(self, sigs, sig_fit):
+        
+#        for sig in sigs:
+#            sig = sg.detrend(sig)
+#            sig -= sig.mean()
+#            sig /= sig.std()
+        
+#        sig_fit -= sig_fit.mean()
+#        sig_fit = sg.savgol_filter(sig_fit, 11, 3)
+#        sig_fit = sg.detrend(sig_fit)
+#        sig_fit /= sig_fit.std()
+        
+        X = np.vstack((np.array(sigs), np.ones_like(sigs[0]))).T
+#        print(X)
+        
+#        clf = SGD(loss='huber', alpha=0.001, max_iter=2e9, tol=1e-6, learning_rate='optimal', shuffle=True, fit_intercept=True)
+        clf = Ridge(alpha=0.001, max_iter=2e9, tol=1e-6, fit_intercept=True, normalize=False, solver='sag', copy_X=True)
+        
+        clf.fit(X, sig_fit)
+#        print(clf.coef_)
+        
+#        n, k = X.shape
+#        y_hat = np.matrix(clf.predict(X)).T
+#        
+#        # change X and sig_fit ot nump matricies. X aslo has a column of ones added
+#        x = np.hstack((np.ones((n,1)), np.matrix(X)))
+#        y = np.matrix(sig_fit).T
+#        
+#        # degrees of freedom
+#        df = float(n-k-1)
+#        
+#        #sample var
+#        sse = np.sum(np.square(y_hat - y), axis=0)
+#        samp_var = sse/df
+#        
+#        # samp var for x
+#        samp_var_x = x.T * x
+#        
+#        # covariant matrix
+#        cov_mat = np.linalg.sqrtm(samp_var[0,0] * samp_var_x.I)
+#        
+#        # standard errors
+#        se = cov_mat.diagonal()[1:]
+#        
+#        sse = np.sum((clf.predict(X) - sig_fit) ** 2, axis=0) / float(X.shape[0] - X.shape[1])
+#        print(sse)
+#        print(sse.shape)
+#        se = np.array([np.sqrt(np.diagonal(sse * np.linalg.inv(np.dot(X.T, X))))])
+#        
+#        t_value = clf.coef_ / se
+#        p_value = 2 * (1 - stats.t.cdf(np.abs(t_value), sig_fit.shape[0] - X.shape[1]))
+        
+        X = X.T
+        stat = stats.pearsonr(clf.coef_[0] * X[0] + clf.coef_[1] * X[1] + clf.coef_[2] * X[2], sig_fit)
+#        stat = stats.pearsonr(clf.coef_[0] * X[0] + clf.coef_[1] * X[1] + clf.coef_[2] * X[2] + clf.coef_[3] * X[3], sig_fit)
+#        print(stat)
+#        print()
+        return clf.coef_, stat[0], stat[1]
+        
 
-        return:
-            (float)
-        """
-        if(len(sig_fit) != len(sig_fit)):
-            print("Signals have different lengths: ", len(sig_fit) , ' &', len(sig_obs))
-        else:
-            sig_obs_var = np.mean(sig_obs)
-            return 1-np.sum((sig_fit-sig_obs)**2)/np.sum((sig_obs-sig_obs_var)**2)
+#    def get_r2(self, sig_fit, sig_obs):
+#        """
+#        gets r^2 (coefficient of determination) of sig_fit w.r.t. sig_obs
+#
+#        inputs:
+#            sig_fit (iterable) = fitted/predicted signal
+#            sig_obs (iterable) = observed signal / raw data
+#
+#        warnings:
+#            sig's must have the same lengths
+#
+#        return:
+#            (float)
+#        """
+#        if(len(sig_fit) != len(sig_fit)):
+#            print("Signals have different lengths: ", len(sig_fit) , ' &', len(sig_obs))
+#        else:
+#            sig_obs_var = np.mean(sig_obs)
+#            return 1-np.sum((sig_fit-sig_obs)**2)/np.sum((sig_obs-sig_obs_var)**2)
 
+    def resamp(self, og_time, new_time, data, shift, start):
+        
+        resample = interp.interp1d(og_time, data, fill_value='extrapolate')
+        shifted = resample(new_time)
+        
+        if shift > 0:
+            shifted[:start] = data[0]
+            
+        if shift < 0:
+            shifted[start:] = data[len(data)-1]
 
+#        shifted = sg.savgol_filter(shifted, 11, 3)
+        
+        return shifted
+    
+    def trim_edges(self, df):
+        
+        i = len(df)-1
+        count = 1
+        change = abs((df.Data[i-1] - df.Data[i]))
+#        print(slope)
+        i -= 1
+        
+#        print(change)
+        while(df.Time[i] > df.Time.max()*0.9):
+            pre_change = change
+            change = abs((df.Data[i-1] - df.Data[i]))
+            diff = abs(change-pre_change)
+#            print(diff)
+            if diff > 0 and diff < 5e-2:
+                count += 1
+                i -= 1
+            else:
+                break
+        df.Data[len(df)-count:] = df.Data[len(df)-count]
+
+        i = 0
+        count = 1
+        change = abs((df.Data[i+1] - df.Data[i]))
+#        print(slope)
+        i += 1
+        
+#        print(change)
+        while(df.Time[i] < df.Time.max()*0.1):
+            pre_change = change
+            change = abs((df.Data[i+1] - df.Data[i]))
+            diff = abs(change-pre_change)
+#            print(diff)
+            if diff > 0 and diff < 5e-2:
+                count += 1
+                i += 1
+            else:
+                break
+        df.Data[:count] = df.Data[count]
+        
+        return df
+        
 
 class peak_analysis:
     """docstring for peak_analysis."""
@@ -260,12 +456,16 @@ class peak_analysis:
         f_O2_resamp = interp.interp1d(f_O2.Time, f_O2.Data, fill_value='extrapolate')
         f_O2_final = f_O2_resamp(O2_df.Time)
         
+#        sns.lineplot(data=f_O2_final)
+#        sns.lineplot(data=O2_df.O2)
+#        plt.show()
+        
         O2_df['cmp'] = O2_df.O2 < f_O2_final
         
         O2_valid_df = O2_df[O2_df.cmp == True]
         
-        O2_valid_df = O2_valid_df[O2_valid_df.Time > 5].reset_index(drop=True)
-        O2_valid_df = O2_valid_df[O2_valid_df.Time < O2_valid_df.Time.max()-5].reset_index(drop=True)
+#        O2_valid_df = O2_valid_df[O2_valid_df.Time > 5].reset_index(drop=True)
+#        O2_valid_df = O2_valid_df[O2_valid_df.Time < O2_valid_df.Time.max()-5].reset_index(drop=True)
 #        O2_valid_df.O2 = sg.savgol_filter(O2_valid_df.O2, 3, 2)
         
         O2_resamp = interp.interp1d(O2_valid_df.Time, O2_valid_df.O2, fill_value='extrapolate')
@@ -288,15 +488,20 @@ class peak_analysis:
         f_CO2_resamp = interp.interp1d(f_CO2.Time, f_CO2.Data , fill_value='extrapolate')
         f_CO2_final = f_CO2_resamp(CO2_df.Time)
         
+#        sns.lineplot(data=f_CO2_final)
+#        sns.lineplot(data=CO2_df.CO2)
+#        plt.show()
+        
         if trough:
             CO2_df['cmp'] = CO2_df.CO2 < f_CO2_final
         else:
             CO2_df['cmp'] = CO2_df.CO2 > f_CO2_final
         
         CO2_valid_df = CO2_df[CO2_df.cmp == True].reset_index(drop=True)
+#        CO2_valid_df = CO2_df
         
-        CO2_valid_df = CO2_valid_df[CO2_valid_df.Time > 5].reset_index(drop=True)
-        CO2_valid_df = CO2_valid_df[CO2_valid_df.Time < CO2_valid_df.Time.max()-5].reset_index(drop=True)
+#        CO2_valid_df = CO2_valid_df[CO2_valid_df.Time > 5].reset_index(drop=True)
+#        CO2_valid_df = CO2_valid_df[CO2_valid_df.Time < CO2_valid_df.Time.max()-5].reset_index(drop=True)
 #        CO2_valid_df.CO2 = sg.savgol_filter(CO2_valid_df.CO2, 3, 2)
         
         CO2_resamp = interp.interp1d(CO2_valid_df.Time, CO2_valid_df.CO2, fill_value='extrapolate')
@@ -309,34 +514,6 @@ class peak_analysis:
 #        plt.show()
     
         return CO2_final_df, O2_final_df
-    
-    def _trim_edges(self, df):
-        
-        i = len(df)-1
-        count = 1
-        change = abs((df.Data[i-1] - df.Data[i]))
-#        print(slope)
-        delete = False
-        i -= 1
-        
-#        print(change)
-        while(df.Time[i] > df.Time.max()*0.9):
-            pre_change = change
-            change = abs((df.Data[i-1] - df.Data[i]))
-            diff = abs(change-pre_change)
-#            print(diff)
-            if diff > 0 and diff < 5e-2:
-                count += 1
-                i -= 1
-                if count > 5:
-                    delete = True
-            else:
-                break
-        
-        if delete == True:
-            df.Data[len(df)-count:] = df.Data[len(df)-count]
-        
-        return df
     
     def peak(self, df, verb, file, time_points):
         """
@@ -512,12 +689,19 @@ class shifter:
         Returns:
             (float) : shift value of signal
         """
-        limit = int(15 * len(base)/scan_time)
-        correlation_series = sg.correlate(base, sig)
-#        correlation_series = correlation_series[len(correlation_series)//2-limit : len(correlation_series)//2+limit+1]
+#        limit = int(15 * len(base)/scan_time)
+        correlation_series = sg.correlate(base, sig, mode='full')
+#        lim_corr = correlation_series[len(correlation_series)//2-limit : len(correlation_series)//2+limit+1]
         
         shift_index = np.argmax(correlation_series) - (len(correlation_series)//2)
+#        shift_index = np.argmax(lim_corr) - (len(lim_corr)//2)
         shift_value = scan_time/len(base) * shift_index
+#        shift_value = 0
+#        shift_index = 0
+#        while shift_value < 5:
+#            shift_index += 1
+#            shift_value = scan_time/len(base) * shift_index
+            
         return shift_value, shift_index, correlation_series
 
     def corr_align(self, base, other_time, other_sig, scan_time, time_points):
@@ -533,10 +717,10 @@ class shifter:
                 The shifted other signal
         '''
 #        shift, start, corr = self.get_cross_correlation(base, other_sig, scan_time)
-        base_norm = base - base.mean()
+#        base_norm = base - base.mean()
 #        base_norm /= base_norm.std()
 
-        other_norm = other_sig - other_sig.mean()
+#        other_norm = other_sig - other_sig.mean()
 #        other_norm /= other_norm.std()
         
 #        print(len(base_norm))
@@ -572,7 +756,11 @@ class shifter:
 #        print(len(other_sig))
 #        print(len(base))
         
-        shift, start, corr = self.get_cross_correlation(base_norm, other_norm, scan_time)
+        base_norm = sg.detrend(base)
+        other_norm = sg.detrend(other_sig)
+#        shift, start, corr = self.get_cross_correlation(base_norm, other_norm, scan_time)
+        other_padded = self.pad_zeros(other_norm)
+        shift, start, corr = self.get_cross_correlation(base_norm, other_padded, scan_time)
 #        print(corr)
 #        print(corr[len(corr)//2])
         #construct resampler
@@ -581,11 +769,13 @@ class shifter:
         resamp = interp.interp1d(other_time+shift, other_sig, fill_value='extrapolate')
         shifted = resamp(time_points)
         
-#        if shift > 0:
+        if shift > 0:
+            shifted[:start] = other_sig[0]
 #            prepend = [other_sig.iloc[0]] * start
 #            prepend.append(other_sig)
 #            final = prepend[:-start]
-#        if shift < 0:
+        if shift < 0:
+            shifted[start:] = other_sig[len(other_sig)-1]
 #            other_sig = other_sig[-start:]
 #            print(-start)
 #            append = [other_sig.iloc[-1]] * -start
@@ -604,8 +794,14 @@ class shifter:
 
 #        shifted = sg.savgol_filter(shifted, 11, 3)
         
-        return df, shifted, corr, shift
+        return df, shifted, corr, shift, start
 #        return df, df.Data, corr
+        
+    def pad_zeros(self, sig):
+        pre = np.zeros_like(sig)
+        post = np.zeros_like(sig)
+        padded = np.concatenate((pre, sig, post))
+        return padded
 
 class optimizer:
     """docstring for optimizer."""

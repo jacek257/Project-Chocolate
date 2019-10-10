@@ -17,6 +17,7 @@ import multiprocessing
 import matplotlib.pyplot as plt
 import seaborn as sns
 import scipy.stats as st
+import fnmatch
 
 # instantiate the argument parser
 parser = argparse.ArgumentParser()
@@ -141,7 +142,14 @@ for i in range(len(p_df)):
     #get all matching files
     b_files = [file for file in os.listdir(patient_dir + '/BOLD/') if file.endswith('.nii')]
     
-    fs_files = [file for file in os.listdir(freesurfer_t1_dir) if file == p_df.Cohort[i]+p_df.ID[i]+'_FS_T1.nii.gz']
+#    fs_files = [file for file in os.listdir(freesurfer_t1_dir) if file == p_df.Cohort[i]+p_df.ID[i]+'_FS_T1.nii.gz']
+#    print(p_df.Cohort[i]+'*'+p_df.ID[i]+'_'+p_df.Date[i]+'_FS_TI.nii*')
+    fs_files = [file for file in os.listdir(freesurfer_t1_dir)  if fnmatch.fnmatch(file, p_df.Cohort[i]+'*'+p_df.ID[i]+'_'+p_df.Date[i]+'_FS_T1.nii*')]
+#    for file in os.listdir(freesurfer_t1_dir):
+#        print(file)
+#    exit()
+    if not fs_files:
+        fs_files = [file for file in os.listdir(freesurfer_t1_dir) if fnmatch.fnmatch(file, p_df.Cohort[i]+p_df.ID[i]+'_FS_T1.nii*')]
 
     #select and add file to appropriate list
     b_temp = patient_dir +'/BOLD/'+b_files[0] if len(b_files) > 0 else ''
@@ -150,6 +158,8 @@ for i in range(len(p_df)):
     nii_paths['BOLD_path'].append(b_temp)
     nii_paths['T1_path'].append(t_temp)
     nii_paths['boldFS_exists'].append(len(b_files) > 0 and len(fs_files)>0)
+    
+#    print(fs_files)
     
     if len(fs_files) == 0:
         warnings['ID'].append(p_df.Cohort[i] + p_df.ID[i] + '_' + p_df.Date[i])
@@ -251,10 +261,22 @@ p_df["Volumes"] = [int(subprocess.run(['fslinfo' ,b_path], stdout=subprocess.PIP
 
 if verb:
     print('Checking total volume for each patient')
-#choose non-trivial bold series
-warning = p_df[p_df.Volumes < 150]
+    
+warning = p_df[p_df.TR != 1.5]
+warning = warning.reset_index(drop=True)
+#print(warning)
 for i in range(len(warning)):
-    print('\t\t' + warning[i].Cohort + warning[i].ID + '_' + warning[i].Date + 'has a total volume < 150')
+#    print(i)
+    warnings['ID'].append(warning.Cohort[i] + warning.ID[i] + '_' + warning.Date[i])
+    warnings['warning'].append('TR != 1.5')
+    print('\t\t' + warning.iloc[i].Cohort + warning.iloc[i].ID + '_' + warning.iloc[i].Date + ' has a TR != 1.5')
+    
+p_df = p_df[p_df.TR == 1.5]
+
+#choose non-trivial bold series
+#warning_2 = p_df[p_df.Volumes < 150]
+#for i in range(len(warning_2)):
+#    print('\t\t' + warning_2[i].Cohort + warning_2[i].ID + '_' + warning_2[i].Date + 'has a total volume < 150')
 #print('\np_df w/ dim > 150\n',p_df.head())
 
 ####run EndTidal Cleaning and return paths
@@ -274,8 +296,9 @@ stats_df = pd.DataFrame()
     # typ = 'block'
     # if typ:
 #for typ in ['four', 'peak', 'trough', 'block']:
-for typ in ['four', 'peak', 'trough']:
+#for typ in ['four', 'peak', 'trough']:
 #for typ in ['peak', 'trough']:
+for typ in ['four']:
     if typ == 'four':
         four = True
         trough = False
@@ -306,7 +329,8 @@ for typ in ['four', 'peak', 'trough']:
     else:
         key = 'p_'
     
-    ET_dict = {'ETO2' : [], 'ETCO2' : [], 'ET_exists' : [], 'Cohort' : [], 'ID' : [], 'Date' : [], 'O2_shift' : [], 'CO2_shift' : []}
+    ET_dict = {'ETO2' : [], 'ETCO2' : [], 'ET_exists' : [], 'Cohort' : [], 'ID' : [], 'Date' : [],
+               'O2_shift' : [], 'CO2_shift' : [], 'coeffs' : [], 'r' : [], 'p_value' : []}
     
     to_drop = []
     
@@ -345,15 +369,16 @@ for typ in ['four', 'peak', 'trough']:
         scan_time = (vol-3) * tr
     
         meants = np.loadtxt(meants_path, delimiter='\n')[3:]
-        meants = signal.detrend(meants)
         time_pts = np.arange(0, scan_time, tr)
     
         #generate cleaned data paths
         save_O2 = f_path[:-4]+'/'+key+'O2_contrast.txt'
         save_CO2 = f_path[:-4]+'/'+key+'CO2_contrast.txt'
+        save = True
     
         #check if the save_files already exist
         if(os.path.exists(save_O2) and os.path.exists(save_CO2) and not over):
+            save = False
             if(verb):
                 print('\tID: ', cohort + id + '_' + date," \tProcessed gas files already exist")
             ET_dict['ETO2'].append(save_O2)
@@ -362,87 +387,164 @@ for typ in ['four', 'peak', 'trough']:
             processed_O2 = np.loadtxt(save_O2)
             processed_CO2 = np.loadtxt(save_CO2)
     
-        else:
-            # need to scale CO2 data is necessary
-            if endTidal.CO2.max() < 1:
-                endTidal.CO2 = endTidal.CO2 * 100
-                
-            if endTidal.Time.max() < 20:
-                endTidal.Time = endTidal.Time * 60
-            
-#            meants = signal.savgol_filter(meants, 11, 3)
-            
-#            endTidal.CO2 = signal.savgol_filter(endTidal.CO2, 35, 3)
-            
-#            print(endTidal)
-    
-            if four:
-                if verb:
-                    print('Starting fourier for', cohort + id + '_' + date)
-                #get fourier cleaned data
-                pre_O2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.O2, 2/60, 25/60, tr, time_pts)
-                pre_CO2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.CO2, 2/60, 25/60, tr, time_pts)
-            elif block:
-                if verb:
-                    print('Starting block for', cohort + id + '_' + date)
-                pre_O2 = analysis.peak_analysis().block_signal(endTidal.Time, endTidal.O2.apply(lambda x:x*-1), time_pts)*-1
-                pre_CO2 = analysis.peak_analysis().block_signal(endTidal.Time, endTidal.CO2, time_pts)
-    
-            elif trough:
-                if verb:
-                    print('Starting troughs for', cohort + id + '_' + date)
-                pre_CO2, pre_O2 = analysis.peak_analysis().peak_four(endTidal, verb, f_path, tr, time_pts, trough=True)
-            
-            elif man:
-                if verb:
-                    print('Starting manual for ', cohort + id + '_' + date)
-                pre_CO2, pre_O2 = analysis.peak_analysis().peak(endTidal, verb, f_path, time_pts)
-            else:
-                if verb:
-                    print('Starting peaks for', cohort + id + '_' + date)
-                pre_CO2, pre_O2 = analysis.peak_analysis().peak_four(endTidal, verb, f_path, tr, time_pts, trough=False)
-    
-            # get shifted O2 and CO2
-            all_CO2 = pre_CO2.merge(pd.DataFrame({'Time' : time_pts, 'meants' : meants}), on=['Time'], how='inner')
-            all_CO2.Data -= all_CO2.Data.mean()
-            all_CO2.Data /- all_CO2.Data.std()
-            
-            all_CO2.meants -= all_CO2.meants.mean()
-            all_CO2.meants /- all_CO2.meants.std()
-            
-            
-#            r2 = st.pearsonr(all_CO2.meants , all_CO2.Data)
-#            print(r2)
-#            corr = signal.correlate(all_CO2.meants, all_CO2.Data)
-#            plt.plot(corr/corr.std())
-#            plt.show()
+        # need to scale CO2 data is necessary
+        if endTidal.CO2.max() < 1:
+            endTidal.CO2 = endTidal.CO2 * 100
         
-#            sns.lineplot(x='Time', y='Data', data=all_CO2)
-#            sns.lineplot(x='Time', y='meants', data=all_CO2)
-#            plt.show()
-#            exit()
-            full_O2, processed_O2, O2_corr, O2_shift = analysis.shifter().corr_align(meants, pre_O2.Time, pre_O2.Data, scan_time, time_pts)
-            ET_dict['O2_shift'].append(O2_shift)
-            full_CO2, processed_CO2, CO2_corr, CO2_shift = analysis.shifter().corr_align(meants, pre_CO2.Time, pre_CO2.Data, scan_time, time_pts)
-            ET_dict['CO2_shift'].append(CO2_shift)
+#        plt.plot(endTidal.CO2)
+#        plt.show()
+        
+        if endTidal.Time.max() < 20:
+            endTidal.Time = endTidal.Time * 60
+        
+        i = 1
+        diff = abs(endTidal.O2.iloc[i+1] - endTidal.O2.iloc[0])
+        while diff < 2:
+            i += 1
+            diff = abs(endTidal.O2.iloc[i+1] - endTidal.O2.iloc[0])
+        
+        endTidal = endTidal[i:].reset_index(drop=True)
+        
+        i = len(endTidal)-2
+        diff = abs(endTidal.O2.iloc[len(endTidal)-1] - endTidal.O2.iloc[i])
+        while diff < 2:
+            i -= 1
+            diff = abs(endTidal.O2.iloc[len(endTidal)-1] - endTidal.O2.iloc[i])
+        
+        endTidal = endTidal[:i].reset_index(drop=True)
+        
+        meants = signal.savgol_filter(meants, 5, 3)
+        
+        endTidal.CO2 = signal.savgol_filter(endTidal.CO2, 35, 3)
+        endTidal.CO2 = signal.detrend(endTidal.CO2)
+        endTidal.O2 = signal.detrend(endTidal.O2)
+        
+#        plt.plot(endTidal.CO2)
+#        plt.show()
+#        exit()
+#            print(endTidal)
+
+        if four:
+            if verb:
+                print('Starting fourier for', cohort + id + '_' + date)
+            #get fourier cleaned data
+            pre_O2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.O2, 3/60, 25/60, tr, time_pts)
+            pre_O2.Data = signal.savgol_filter(pre_O2.Data, 5, 3)
+            pre_CO2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.CO2, 3/60, 25/60, tr, time_pts)
+            pre_CO2.Data = signal.savgol_filter(pre_CO2.Data, 5, 3)
+        elif block:
+            if verb:
+                print('Starting block for', cohort + id + '_' + date)
+            pre_O2 = analysis.peak_analysis().block_signal(endTidal.Time, endTidal.O2.apply(lambda x:x*-1), time_pts)*-1
+            pre_CO2 = analysis.peak_analysis().block_signal(endTidal.Time, endTidal.CO2, time_pts)
+
+        elif trough:
+            if verb:
+                print('Starting troughs for', cohort + id + '_' + date)
+            pre_CO2, pre_O2 = analysis.peak_analysis().peak_four(endTidal, verb, f_path, tr, time_pts, trough=True)
+        
+        elif man:
+            if verb:
+                print('Starting manual for ', cohort + id + '_' + date)
+            pre_CO2, pre_O2 = analysis.peak_analysis().peak(endTidal, verb, f_path, time_pts)
+        else:
+            if verb:
+                print('Starting peaks for', cohort + id + '_' + date)
+            pre_CO2, pre_O2 = analysis.peak_analysis().peak_four(endTidal, verb, f_path, tr, time_pts, trough=False)
+
+        # get shifted O2 and CO2
+#        all_CO2.Data -= all_CO2.Data.mean()
+#        all_CO2.Data /- all_CO2.Data.std()
+#        
+#        all_CO2.meants -= all_CO2.meants.mean()
+#        all_CO2.meants /- all_CO2.meants.std()
+#        
+#        
+#        r = st.pearsonr(all_CO2.meants , all_CO2.Data)
+#        print(r)
+#        corr = signal.correlate(all_CO2.meants, all_CO2.Data)
+#        plt.plot(corr/corr.std())
+#        plt.show()
+#
+#        sns.lineplot(x='Time', y='Data', data=all_CO2)
+#        sns.lineplot(x='Time', y='meants', data=all_CO2)
+#        plt.show()
+#        exit()
+        
+        full_O2, processed_O2, O2_corr, O2_shift, O2_start = analysis.shifter().corr_align(meants, pre_O2.Time, pre_O2.Data, scan_time, time_pts)
+#        O2_shift = comb_shift
+#        ET_dict['O2_shift'].append(O2_shift)
+        full_CO2, processed_CO2, CO2_corr, CO2_shift, CO2_start = analysis.shifter().corr_align(meants, pre_CO2.Time, pre_CO2.Data, scan_time, time_pts)
+#        CO2_shift = comb_shift
+#        ET_dict['CO2_shift'].append(CO2_shift)
+        
+#        processed_comb = processed_O2 * processed_CO2
+        
+#        full_O2.to_excel(id+'_'+key+'all_O2.xlsx', index=False)
+#        full_CO2.to_excel(id+'_'+key+'all_CO2.xlsx', index=False)
+        coeff, r, p_value = analysis.stat_utils().get_info([processed_O2, processed_CO2], meants)
+        
+        combined = coeff[0] * processed_O2 + coeff[1] * processed_CO2 + coeff[2]
+        full_comb, processed_comb, comb_corr, comb_shift, comb_start = analysis.shifter().corr_align(meants, time_pts, combined, scan_time, time_pts)
+        O2_shift += comb_shift
+        CO2_shift += comb_shift
+        
+        processed_O2_f = analysis.stat_utils().resamp(pre_O2.Time + O2_shift, time_pts, pre_O2.Data, O2_shift, O2_start+comb_start)
+        processed_CO2_f = analysis.stat_utils().resamp(pre_CO2.Time + CO2_shift, time_pts, pre_CO2.Data, CO2_shift, CO2_start+comb_start)
+        
+        coeff_f, r, p_value = analysis.stat_utils().get_info([processed_O2_f, processed_CO2_f], meants)
+        
+#        trim_O2 = pre_O2.Data[:len(meants)]
+#        tirm_CO2 = pre_CO2.Data[:len(meants)]
+#        coeff, r, p_value = analysis.stat_utils().get_info([trim_O2, tirm_CO2], meants)
+#        
+#        comb_data = coeff[0] * pre_O2.Data + coeff[1] * pre_CO2.Data + coeff[2]
+#        comb_time = pre_O2.Time
+#        full_comb, processed_comb, comb_corr, comb_shift, comb_idx = analysis.shifter().corr_align(meants, comb_time, comb_data, scan_time, time_pts)
+#        O2_shift = comb_shift
+#        O2_corr = comb_corr
+#        CO2_shift = comb_shift
+#        CO2_corr = comb_corr
+#        
+#        processed_O2 = analysis.stat_utils().resamp(pre_O2.Time + O2_shift, time_pts, pre_O2.Data, O2_shift, comb_idx)
+#        processed_CO2 = analysis.stat_utils().resamp(pre_CO2.Time + CO2_shift, time_pts, pre_CO2.Data, CO2_shift, comb_idx)        
+
+        ET_dict['O2_shift'].append(O2_shift)
+        ET_dict['CO2_shift'].append(CO2_shift)
+        
+#        r, p_value = st.pearsonr(coeff[0] * processed_O2 + coeff[1] * processed_CO2 + coeff[2], meants)
+        
+#        ET_dict['coeffs'].append(coeff)
+        ET_dict['coeffs'].append(coeff_f)
+        ET_dict['r'].append(r)
+        ET_dict['p_value'].append(p_value)
+        
+        
+        if save:
             #storing cleaned data paths
             ET_dict['ETO2'].append(save_O2)
             ET_dict['ETCO2'].append(save_CO2)
             ET_dict['ET_exists'].append(True)
     
-            processed_O2 = signal.savgol_filter(processed_O2, 11, 3)
-            processed_CO2 = signal.savgol_filter(processed_CO2, 11, 3)
+#            processed_O2 = signal.savgol_filter(processed_O2, 11, 3)
+#            processed_CO2 = signal.savgol_filter(processed_CO2, 11, 3)
             
             #save data
-            np.savetxt(save_O2, processed_O2, delimiter='\t')
-            np.savetxt(save_CO2, processed_CO2, delimiter='\t')
+#            np.savetxt(save_O2, processed_O2, delimiter='\t')
+#            np.savetxt(save_CO2, processed_CO2, delimiter='\t')
+            np.savetxt(save_O2, processed_O2_f, delimiter='\t')
+            np.savetxt(save_CO2, processed_CO2_f, delimiter='\t')
     
             # save and create plots (shifts)
-            analysis.stat_utils().save_plots(df=endTidal, O2_time=pre_O2.Time, O2=pre_O2.Data, O2_shift=processed_O2, O2_correlation=O2_corr,
-                                             CO2_time=pre_CO2.Time, CO2=pre_CO2.Data, CO2_shift=processed_CO2, meants=meants, CO2_correlation=CO2_corr,
+#            analysis.stat_utils().save_plots(df=endTidal, O2_time=pre_O2.Time, O2=pre_O2.Data, O2_shift=processed_O2, O2_correlation=O2_corr, O2_shift_f=processed_O2,
+#                                             CO2_time=pre_CO2.Time, CO2=pre_CO2.Data, CO2_shift=processed_CO2, CO2_correlation=CO2_corr, CO2_shift_f=processed_CO2, meants=meants,
+#                                             coeff=coeff, f_path=f_path, key=key, verb=verb, time_points=time_pts, TR=tr)
+            analysis.stat_utils().save_plots(df=endTidal, O2_time=pre_O2.Time, O2=pre_O2.Data, O2_shift=processed_O2, O2_correlation=O2_corr, O2_shift_f=processed_O2_f,
+                                             CO2_time=pre_CO2.Time, CO2=pre_CO2.Data, CO2_shift=processed_CO2, CO2_correlation=CO2_corr, CO2_shift_f=processed_CO2_f, meants=meants,
+                                             coeff=coeff, coeff_f=coeff_f, comb_corr=comb_corr,
                                              f_path=f_path, key=key, verb=verb, time_points=time_pts, TR=tr)
             # analysis.stat_utils().save_plots(df=endTidal, O2=pre_O2, O2_shift=processed_O2, CO2=pre_CO2, CO2_shift=processed_CO2, meants=meants, f_path=graphs_dir+id, key=key, verb=verb, TR=interp_time)
-    
+
     
     if verb:
         print()
@@ -465,192 +567,211 @@ for typ in ['four', 'peak', 'trough']:
     
     #    print("df head----------------\n",p_df.head())
     
+#    if verb:
+#        print('\n\nStarting to run feat')
+#    #run Feat
+#    #check for (and make) feat directory
+#    if not os.path.exists(feat_dir):
+#        os.mkdir(feat_dir)
+#    
+#    #make design file directory
+#    if not os.path.exists(feat_dir+'design_files/'):
+#        os.mkdir(feat_dir+'design_files/')
+#    
+#    # load design template
+#    with open(feat_dir+'design_files/template', 'r') as template:
+#        stringTemp = template.read()
+#        for i in range(len(df)):
+#            output_dir = feat_dir+key+df.Cohort[i]+df.ID[i]+'_'+df.Date[i]
+##            output_dir = '/media/ke/8tb_part2/FSL_work/feat/both_shift/'+key+df.Cohort[i]+df.ID[i]+'_'+df.Date[i]
+#            if os.path.exists(output_dir+'.feat'):
+#                if verb:
+#                    print('FEAT already exists for', key+df.Cohort[i]+df.ID[i]+'_'+df.Date[i])
+#                if over:
+#                    if verb:
+#                        print('Overwriting')
+#                    subprocess.run(['rm', '-rf', output_dir+'.feat'])
+#                else:
+#                    continue
+#            to_write = stringTemp[:]
+#            # print(to_write)
+#            to_write = to_write.replace("%%OUTPUT_DIR%%",'"'+output_dir+'"')
+#            to_write = to_write.replace("%%VOLUMES%%",'"'+str(df.Volumes[i])+'"')
+#            to_write = to_write.replace("%%TR%%",'"'+str(df.eff_TR[i])+'"')
+#            to_write = to_write.replace("%%BOLD_FILE%%",'"'+df.BOLD_path[i]+'"')
+#            to_write = to_write.replace("%%FS_T1%%",'"'+df.T1_path[i]+'"')
+#            to_write = to_write.replace("%%O2_CONTRAST%%",'"'+df.ETO2[i]+'"')
+#            to_write = to_write.replace("%%CO2_CONTRAST%%",'"'+df.ETCO2[i]+'"')
+#    
+#            ds_path = feat_dir+'design_files/'+key+df.Cohort[i]+df.ID[i]+'_'+df.Date[i]+'.fsf'
+#            with open(ds_path, 'w+') as outFile:
+#                outFile.write(to_write)
+#                        
+#            index = analysis.parallel_processing().get_next_avail(processes, verb, limit, key, 'FEAT')
+#            
+#            if verb:
+#                print('Starting FEAT')
+#            processes[index] = subprocess.Popen(['feat', ds_path])
+#            time.sleep(0.5)
+#        
+#        analysis.parallel_processing().wait_remaining(processes, verb, key, 'FEAT')
+#        
+#    # run featquery
+#    for i in range(len(df)):
+#        p_id = key+df.Cohort[i]+df.ID[i]+'_'+df.Date[i]
+#        feat_output_dir = feat_dir+p_id+'.feat/'
+##        feat_output_dir = '/media/ke/8tb_part2/FSL_work/feat/both_shift/'+p_id+'.feat/'
+#        
+#        O2_mask_dir_path = feat_output_dir+'cluster_mask_zstat1.nii.gz'
+#        CO2_mask_dir_path = feat_output_dir+'cluster_mask_zstat2.nii.gz'
+#                    
+#        index = analysis.parallel_processing().get_next_avail(processes, verb, limit, key, 'featquery')
+#        
+#        if os.path.exists(feat_output_dir+'fq_O2'):
+#            if verb:
+#                print('O2 featquery already exists for', p_id)
+#            if over:
+#                if verb:
+#                    print('Overwriting')
+#                processes[index] = subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope1', 'fq_O2', '-p', '-s', O2_mask_dir_path])
+#        else:
+#            if verb:
+#                print('Starting O2 featquery for', p_id)
+#            processes[index] = subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope1', 'fq_O2', '-p', '-s', O2_mask_dir_path])
+#        
+#        index = analysis.parallel_processing().get_next_avail(processes, verb, limit, key, 'featquery')
+#        
+#        if os.path.exists(feat_output_dir+'fq_CO2'):
+#            if verb:
+#                print('CO2 featquery already exists for', p_id)
+#            if over:
+#                if verb:
+#                    print('Overwriting')
+#                processes[index] = subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope2', 'fq_CO2', '-p', '-s', CO2_mask_dir_path])
+#        else:
+#            if verb:
+#                print('Starting featquery for CO2')
+#            processes[index] = subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope2', 'fq_CO2', '-p', '-s', CO2_mask_dir_path])
+#    
+#
+#    analysis.parallel_processing().wait_remaining(processes, verb, key, 'featquery')
+        
+    # get the stats
+    for i in range(len(df)):        
+        add = True
+        
+#        output_dir = feat_dir+key+df.Cohort[i]+df.ID[i]+'_'+df.Date[i]
+##        output_dir = '/media/ke/8tb_part2/FSL_work/feat/both_shift/'+key+df.Cohort[i]+df.ID[i]+'_'+df.Date[i]
+#        feat_output_dir = output_dir+'.feat/'
+#        
+#        try:
+#            cz1 = pd.read_csv(feat_output_dir+'cluster_zstat1.txt', sep='\t', usecols=['Voxels', '-log10(P)', 'Z-MAX', 'COPE-MEAN'])
+#            t_vol = cz1.Voxels.sum()
+#            
+#            for j in range(len(cz1)):
+#                cz1.iloc[j] = cz1.iloc[j] * cz1.iloc[j].Voxels/t_vol
+#            
+#
+#            z1 = { 'ID' : [df.Cohort[i]+df.ID[i]+'_'+df.Date[i]],
+#                   'type' : [key],
+#                   'Voxels': [t_vol],
+#                   '-log10(p)' : [cz1['-log10(P)'].sum()],
+#                   'COPE-MEAN' : [cz1['COPE-MEAN'].sum()]}
+#            cz1_final = pd.DataFrame(z1)
+#        
+#        except FileNotFoundError:
+#            warnings['ID'].append(df.Cohort[i] + df.ID[i] + '_' + df.Date[i])
+#            warnings['warning'].append('No cluster_zstat1.txt')
+#            add = False
+#            if verb:
+#                print('No cluster_zstat1.txt')
+#        
+#        try:
+#            cz2 = pd.read_csv(feat_output_dir+'cluster_zstat2.txt', sep='\t', usecols=['Voxels', '-log10(P)', 'Z-MAX', 'COPE-MEAN'])
+#            t_vol = cz2.Voxels.sum()
+#            
+#            for j in range(len(cz2)):
+#                cz2.iloc[j] = cz2.iloc[j] * cz2.iloc[j].Voxels/t_vol
+#            
+#
+#            z2 = { 'ID' : [df.Cohort[i]+df.ID[i]+'_'+df.Date[i]],
+#                   'type' : [key],
+#                   'Voxels': [t_vol],
+#                   '-log10(p)' : [cz2['-log10(P)'].sum()],
+#                   'COPE-MEAN' : [cz2['COPE-MEAN'].sum()]}
+#            cz2_final = pd.DataFrame(z2)
+#        
+#        except FileNotFoundError:
+#            warnings['ID'].append(df.Cohort[i] + df.ID[i] + '_' + df.Date[i])
+#            warnings['warning'].append('No cluster_zstat2.txt')
+#            add = False
+#            if verb:
+#                print('No cluster_zstat2.txt', df.ID[i], '_', df.Date[i])
+#        
+#        build = cz1_final.merge(cz2_final, on=['ID', 'type'], suffixes=('_O2', '_CO2'))
+#        
+#        O2_mask_dir_path = feat_output_dir+'cluster_mask_zstat1.nii.gz'
+#        CO2_mask_dir_path = feat_output_dir+'cluster_mask_zstat2.nii.gz'
+#            
+#        O2 = feat_output_dir+'fq_O2/'
+#        try:
+#            fq1 = pd.read_csv(O2+'report.txt', sep='\t| ', header=None, usecols=[5], engine='python')
+#            fq1 = fq1.rename(columns={5 : 'fq_mean'})
+#            fq1['ID'] = df.Cohort[i]+df.ID[i]+'_'+df.Date[i]
+#            fq1['type'] = key
+#            fq1 = fq1[['ID', 'type', 'fq_mean']]
+#            build = build.merge(fq1, on=['ID', 'type'], suffixes=('_O2', '_CO2'))
+#        except FileNotFoundError:
+#            warnings['ID'].append(df.Cohort[i] + df.ID[i] + '_' + df.Date[i])
+#            warnings['warning'].append('No O2 activation found')
+#            add = False
+#            if verb:
+#                print('No O2 activation found for', df.ID[i] + '_' + df.Date[i], 'O2')
+#        
+#            
+#        CO2 = feat_output_dir+'fq_CO2/'
+#        try:
+#            fq2 = pd.read_csv(CO2+'report.txt', sep='\t| ', header=None, usecols=[5], engine='python')
+#            fq2 = fq2.rename(columns={5 : 'fq_mean'})
+#            fq2['ID'] = df.Cohort[i]+df.ID[i]+'_'+df.Date[i]
+#            fq2['type'] = key
+#            fq2 = fq2[['ID', 'type', 'fq_mean']]
+#            build = build.merge(fq2, on=['ID', 'type'], suffixes=('_O2', '_CO2'))
+#        except FileNotFoundError:
+#            warnings['ID'].append(df.Cohort[i] + df.ID[i] + '_' + df.Date[i])
+#            warnings['warning'].append('No CO2 activation found')
+#            add = False
+#            if verb:
+#                print('No CO2 activation found for', df.ID[i] + '_' + df.Date[i], 'O2')
+#        
+#        build['O2_shift'] = df.O2_shift[i]
+#        build['CO2_shift'] = df.CO2_shift[i]
+#        build['O2_coeff'] = df.coeffs[i][0]
+#        build['CO2_coeff'] = df.coeffs[i][1]
+#        build['r'] = df.r[i]
+#        build['p_value'] = df.p_value[i]
+        
+        build = pd.DataFrame({'ID' : [df.Cohort[i]+df.ID[i]+'_'+df.Date[i]],
+                              'O2_shift' : [df.O2_shift[i]],
+                              'CO2_shift' : [df.CO2_shift[i]],
+                              'O2_coeff' : [df.coeffs[i][0]],
+                              'CO2_coeff' : [df.coeffs[i][1]],
+                              'r' : [df.r[i]],
+                              'p_value' : [df.p_value[i]]})
+        
+        if add:
+            stats_df = pd.concat([stats_df, build])
+    
     if verb:
-        print('\n\nStarting to run feat')
-    #run Feat
-    #check for (and make) feat directory
-    if not os.path.exists(feat_dir):
-        os.mkdir(feat_dir)
-    
-    #make design file directory
-    if not os.path.exists(feat_dir+'design_files/'):
-        os.mkdir(feat_dir+'design_files/')
-    
-    # load design template
-    with open(feat_dir+'design_files/template', 'r') as template:
-        stringTemp = template.read()
-        for i in range(len(df)):
-            output_dir = feat_dir+key+df.Cohort[i]+df.ID[i]+'_'+df.Date[i]
-            if os.path.exists(output_dir+'.feat'):
-                if verb:
-                    print('FEAT already exists for', key+df.Cohort[i]+df.ID[i]+'_'+df.Date[i])
-                if over:
-                    if verb:
-                        print('Overwriting')
-                    subprocess.Popen(['rm', '-rf', output_dir+'.feat'])
-                else:
-                    continue
-            to_write = stringTemp[:]
-            # print(to_write)
-            to_write = to_write.replace("%%OUTPUT_DIR%%",'"'+output_dir+'"')
-            to_write = to_write.replace("%%VOLUMES%%",'"'+str(df.Volumes[i])+'"')
-            to_write = to_write.replace("%%TR%%",'"'+str(df.eff_TR[i])+'"')
-            to_write = to_write.replace("%%BOLD_FILE%%",'"'+df.BOLD_path[i]+'"')
-            to_write = to_write.replace("%%FS_T1%%",'"'+df.T1_path[i]+'"')
-            to_write = to_write.replace("%%O2_CONTRAST%%",'"'+df.ETO2[i]+'"')
-            to_write = to_write.replace("%%CO2_CONTRAST%%",'"'+df.ETCO2[i]+'"')
-    
-            ds_path = feat_dir+'design_files/'+key+df.Cohort[i]+df.ID[i]+'_'+df.Date[i]+'.fsf'
-            with open(ds_path, 'w+') as outFile:
-                outFile.write(to_write)
-                        
-            index = analysis.parallel_processing().get_next_avail(processes, verb, limit, key, 'FEAT')
-            
-            if verb:
-                print('Starting FEAT')
-            processes[index] = subprocess.Popen(['feat', ds_path])
-            time.sleep(0.5)
-        
-        analysis.parallel_processing().wait_remaining(processes, verb, key, 'FEAT')
-        
-        # run featquery
-        for i in range(len(df)):
-            p_id = key+df.Cohort[i]+df.ID[i]+'_'+df.Date[i]
-            feat_output_dir = feat_dir+p_id+'.feat/'
-            
-            O2_mask_dir_path = feat_output_dir+'cluster_mask_zstat1.nii.gz'
-            CO2_mask_dir_path = feat_output_dir+'cluster_mask_zstat2.nii.gz'
-                        
-            index = analysis.parallel_processing().get_next_avail(processes, verb, limit, key, 'featquery')
-            
-            if os.path.exists(feat_output_dir+'fq_O2'):
-                if verb:
-                    print('O2 featquery already exists for', p_id)
-                if over:
-                    if verb:
-                        print('Overwriting')
-                    processes[index] = subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope1', 'fq_O2', '-p', '-s', O2_mask_dir_path])
-            else:
-                if verb:
-                    print('Starting O2 featquery for', p_id)
-                processes[index] = subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope1', 'fq_O2', '-p', '-s', O2_mask_dir_path])
-            
-            index = analysis.parallel_processing().get_next_avail(processes, verb, limit, key, 'featquery')
-            
-            if os.path.exists(feat_output_dir+'fq_CO2'):
-                if verb:
-                    print('CO2 featquery already exists for', p_id)
-                if over:
-                    if verb:
-                        print('Overwriting')
-                    processes[index] = subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope2', 'fq_CO2', '-p', '-s', CO2_mask_dir_path])
-            else:
-                if verb:
-                    print('Starting featquery for CO2')
-                processes[index] = subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope2', 'fq_CO2', '-p', '-s', CO2_mask_dir_path])
-        
-    
-        analysis.parallel_processing().wait_remaining(processes, verb, key, 'featquery')
-        
-        # get the stats
-        for i in range(len(df)):        
-            add = True
-            
-            output_dir = feat_dir+key+df.Cohort[i]+df.ID[i]+'_'+df.Date[i]
-            feat_output_dir = output_dir+'.feat/'
-            
-            try:
-                cz1 = pd.read_csv(feat_output_dir+'cluster_zstat1.txt', sep='\t', usecols=['Voxels', '-log10(P)', 'Z-MAX', 'COPE-MEAN'])
-                t_vol = cz1.Voxels.sum()
-                
-                for j in range(len(cz1)):
-                    cz1.iloc[j] = cz1.iloc[j] * cz1.iloc[j].Voxels/t_vol
-                
-    
-                z1 = { 'ID' : [df.Cohort[i]+df.ID[i]+'_'+df.Date[i]],
-                       'type' : [key],
-                       '-log10(p)' : [cz1['-log10(P)'].sum()],
-                       'Z-MAX' : [cz1['Z-MAX'].sum()],
-                       'COPE-MEAN' : [cz1['COPE-MEAN'].sum()]}
-                cz1_final = pd.DataFrame(z1)
-            
-            except FileNotFoundError:
-                warnings['ID'].append(p_df.Cohort[i] + p_df.ID[i] + '_' + p_df.Date[i])
-                warnings['warning'].append('No cluster_zstat1.txt')
-                add = False
-                if verb:
-                    print('No cluster_zstat1.txt')
-            
-            try:
-                cz2 = pd.read_csv(feat_output_dir+'cluster_zstat2.txt', sep='\t', usecols=['Voxels', '-log10(P)', 'Z-MAX', 'COPE-MEAN'])
-                t_vol = cz2.Voxels.sum()
-                
-                for j in range(len(cz2)):
-                    cz2.iloc[j] = cz2.iloc[j] * cz2.iloc[j].Voxels/t_vol
-                
-    
-                z2 = { 'ID' : [df.Cohort[i]+df.ID[i]+'_'+df.Date[i]],
-                       'type' : [key],
-                       '-log10(p)' : [cz2['-log10(P)'].sum()],
-                       'Z-MAX' : [cz2['Z-MAX'].sum()],
-                       'COPE-MEAN' : [cz2['COPE-MEAN'].sum()]}
-                cz2_final = pd.DataFrame(z2)
-            
-            except FileNotFoundError:
-                warnings['ID'].append(p_df.Cohort[i] + p_df.ID[i] + '_' + p_df.Date[i])
-                warnings['warning'].append('No cluster_zstat2.txt')
-                add = False
-                if verb:
-                    print('No cluster_zstat2.txt')
-            
-            build = cz1_final.merge(cz2_final, on=['ID', 'type'], suffixes=('_O2', '_CO2'))
-            
-            O2_mask_dir_path = feat_output_dir+'cluster_mask_zstat1.nii.gz'
-            CO2_mask_dir_path = feat_output_dir+'cluster_mask_zstat2.nii.gz'
-                
-            O2 = feat_output_dir+'fq_O2/'
-            try:
-                fq1 = pd.read_csv(O2+'report.txt', sep='\t| ', header=None, usecols=[5], engine='python')
-                fq1 = fq1.rename(columns={5 : 'mean'})
-                fq1['ID'] = df.Cohort[i]+df.ID[i]+'_'+df.Date[i]
-                fq1['type'] = key
-                fq1 = fq1[['ID', 'type', 'mean']]
-                build = build.merge(fq1, on=['ID', 'type'], suffixes=('_O2', '_CO2'))
-            except FileNotFoundError:
-                warnings['ID'].append(p_df.Cohort[i] + p_df.ID[i] + '_' + p_df.Date[i])
-                warnings['warning'].append('No O2 activation found')
-                add = False
-                if verb:
-                    print('No O2 activation found')
-            
-                
-            CO2 = feat_output_dir+'fq_CO2/'
-            try:
-                fq2 = pd.read_csv(CO2+'report.txt', sep='\t| ', header=None, usecols=[5], engine='python')
-                fq2 = fq2.rename(columns={5 : 'mean'})
-                fq2['ID'] = df.Cohort[i]+df.ID[i]+'_'+df.Date[i]
-                fq2['type'] = key
-                fq2 = fq2[['ID', 'type', 'mean']]
-                build = build.merge(fq2, on=['ID', 'type'], suffixes=('_O2', '_CO2'))
-            except FileNotFoundError:
-                warnings['ID'].append(p_df.Cohort[i] + p_df.ID[i] + '_' + p_df.Date[i])
-                warnings['warning'].append('No CO2 activation found')
-                add = False
-                if verb:
-                    print('No CO2 activation found')
-            
-            if add:
-                stats_df = pd.concat([stats_df, build])
-        
-        if verb:
-            print()
+        print()
     
     stats_df.reset_index(drop=True)
 
-warnings_df = pd.DataFrame(warnings)
+warnings_df = pd.DataFrame(warnings).sort_values('ID')
+stats_df = stats_df.sort_values('ID')
 
-with pd.ExcelWriter(path+'stats_data.xlsx') as writer:  # doctest: +SKIP
-#    stats_df.to_excel(writer, sheet_name='Stats', index=False)
+with pd.ExcelWriter(path+'stats_data_comb.xlsx') as writer:  # doctest: +SKIP
+    stats_df.to_excel(writer, sheet_name='Stats', index=False)
     warnings_df.to_excel(writer, sheet_name='Warnings', index=False)
 
 if verb:
