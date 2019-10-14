@@ -413,9 +413,10 @@ for typ in ['four']:
         
         endTidal = endTidal[:i].reset_index(drop=True)
         
-        meants = signal.savgol_filter(meants, 5, 3)
+        meants = signal.detrend(meants)
+        meants = signal.savgol_filter(meants, 7, 3)
         
-        endTidal.CO2 = signal.savgol_filter(endTidal.CO2, 35, 3)
+#        endTidal.CO2 = signal.savgol_filter(endTidal.CO2, 35, 3)
         endTidal.CO2 = signal.detrend(endTidal.CO2)
         endTidal.O2 = signal.detrend(endTidal.O2)
         
@@ -429,9 +430,9 @@ for typ in ['four']:
                 print('Starting fourier for', cohort + id + '_' + date)
             #get fourier cleaned data
             pre_O2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.O2, 3/60, 25/60, tr, time_pts)
-            pre_O2.Data = signal.savgol_filter(pre_O2.Data, 5, 3)
+#            pre_O2.Data = signal.savgol_filter(pre_O2.Data, 5, 3)
             pre_CO2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.CO2, 3/60, 25/60, tr, time_pts)
-            pre_CO2.Data = signal.savgol_filter(pre_CO2.Data, 5, 3)
+#            pre_CO2.Data = signal.savgol_filter(pre_CO2.Data, 5, 3)
         elif block:
             if verb:
                 print('Starting block for', cohort + id + '_' + date)
@@ -471,10 +472,10 @@ for typ in ['four']:
 #        plt.show()
 #        exit()
         
-        full_O2, processed_O2, O2_corr, O2_shift, O2_start = analysis.shifter().corr_align(meants, pre_O2.Time, pre_O2.Data, scan_time, time_pts)
+#        full_O2, processed_O2, O2_corr, O2_shift, O2_start = analysis.shifter().corr_align(meants, pre_O2.Time, pre_O2.Data, scan_time, time_pts)
 #        O2_shift = comb_shift
 #        ET_dict['O2_shift'].append(O2_shift)
-        full_CO2, processed_CO2, CO2_corr, CO2_shift, CO2_start = analysis.shifter().corr_align(meants, pre_CO2.Time, pre_CO2.Data, scan_time, time_pts)
+#        full_CO2, processed_CO2, CO2_corr, CO2_shift, CO2_start = analysis.shifter().corr_align(meants, pre_CO2.Time, pre_CO2.Data, scan_time, time_pts)
 #        CO2_shift = comb_shift
 #        ET_dict['CO2_shift'].append(CO2_shift)
         
@@ -482,17 +483,17 @@ for typ in ['four']:
         
 #        full_O2.to_excel(id+'_'+key+'all_O2.xlsx', index=False)
 #        full_CO2.to_excel(id+'_'+key+'all_CO2.xlsx', index=False)
-        coeff, r, p_value = analysis.stat_utils().get_info([processed_O2, processed_CO2], meants)
-        
-        combined = coeff[0] * processed_O2 + coeff[1] * processed_CO2 + coeff[2]
-        full_comb, processed_comb, comb_corr, comb_shift, comb_start = analysis.shifter().corr_align(meants, time_pts, combined, scan_time, time_pts)
-        O2_shift += comb_shift
-        CO2_shift += comb_shift
-        
-        processed_O2_f = analysis.stat_utils().resamp(pre_O2.Time + O2_shift, time_pts, pre_O2.Data, O2_shift, O2_start+comb_start)
-        processed_CO2_f = analysis.stat_utils().resamp(pre_CO2.Time + CO2_shift, time_pts, pre_CO2.Data, CO2_shift, CO2_start+comb_start)
-        
-        coeff_f, r, p_value = analysis.stat_utils().get_info([processed_O2_f, processed_CO2_f], meants)
+#        coeff, r, p_value = analysis.stat_utils().get_info([processed_O2, processed_CO2], meants)
+#        
+#        combined = coeff[0] * processed_O2 + coeff[1] * processed_CO2 + coeff[2]
+#        full_comb, processed_comb, comb_corr, comb_shift, comb_start = analysis.shifter().corr_align(meants, time_pts, combined, scan_time, time_pts)
+#        O2_shift += comb_shift
+#        CO2_shift += comb_shift
+#        
+#        processed_O2_f = analysis.stat_utils().resamp(pre_O2.Time + O2_shift, time_pts, pre_O2.Data, O2_shift, O2_start+comb_start)
+#        processed_CO2_f = analysis.stat_utils().resamp(pre_CO2.Time + CO2_shift, time_pts, pre_CO2.Data, CO2_shift, CO2_start+comb_start)
+#        
+#        coeff_f, r, p_value = analysis.stat_utils().get_info([processed_O2_f, processed_CO2_f], meants)
         
 #        trim_O2 = pre_O2.Data[:len(meants)]
 #        tirm_CO2 = pre_CO2.Data[:len(meants)]
@@ -508,6 +509,30 @@ for typ in ['four']:
 #        
 #        processed_O2 = analysis.stat_utils().resamp(pre_O2.Time + O2_shift, time_pts, pre_O2.Data, O2_shift, comb_idx)
 #        processed_CO2 = analysis.stat_utils().resamp(pre_CO2.Time + CO2_shift, time_pts, pre_CO2.Data, CO2_shift, comb_idx)        
+        
+        if verb:
+            print('Shifting')
+        meants_df = pd.DataFrame({'Time' : time_pts,
+                                  'Data' : meants})
+        O2_df, process_O2, O2_shift, O2_start = analysis.shifter().edge_match(meants_df, pre_O2, tr, time_pts)
+        CO2_df, process_CO2, CO2_shift, CO2_start = analysis.shifter().edge_match(meants_df, pre_CO2, tr, time_pts)
+        
+        coeff, r, p_value = analysis.stat_utils().get_info([process_O2, process_CO2], meants)
+        
+        if verb:
+            print('Combining')
+        comb_data = coeff[0] * process_O2 + coeff[1] * process_CO2 + coeff[2]
+        comb_time = time_pts
+        comb_df, process_comb, comb_shift, comb_start = analysis.shifter().edge_match(meants_df, pd.DataFrame({'Time' : comb_time, 'Data' : comb_data}), tr, time_pts)
+        O2_shift += comb_shift
+        CO2_shift += comb_shift
+        
+        if verb:
+            print('Shifting again')
+        process_O2_f = analysis.stat_utils().resamp(pre_O2.Time + O2_shift, time_pts, pre_O2.Data, O2_shift, O2_start+comb_start)
+        process_CO2_f = analysis.stat_utils().resamp(pre_CO2.Time + CO2_shift, time_pts, pre_CO2.Data, CO2_shift, CO2_start+comb_start)
+        
+        coeff_f, r, p_value = analysis.stat_utils().get_info([process_O2_f, process_CO2_f], meants)
 
         ET_dict['O2_shift'].append(O2_shift)
         ET_dict['CO2_shift'].append(CO2_shift)
@@ -525,6 +550,9 @@ for typ in ['four']:
             ET_dict['ETO2'].append(save_O2)
             ET_dict['ETCO2'].append(save_CO2)
             ET_dict['ET_exists'].append(True)
+            
+            if verb:
+                print('Saving')
     
 #            processed_O2 = signal.savgol_filter(processed_O2, 11, 3)
 #            processed_CO2 = signal.savgol_filter(processed_CO2, 11, 3)
@@ -532,17 +560,23 @@ for typ in ['four']:
             #save data
 #            np.savetxt(save_O2, processed_O2, delimiter='\t')
 #            np.savetxt(save_CO2, processed_CO2, delimiter='\t')
-            np.savetxt(save_O2, processed_O2_f, delimiter='\t')
-            np.savetxt(save_CO2, processed_CO2_f, delimiter='\t')
+#            np.savetxt(save_O2, processed_O2_f, delimiter='\t')
+#            np.savetxt(save_CO2, processed_CO2_f, delimiter='\t')
+            np.savetxt(save_O2, process_O2_f, delimiter='\t')
+            np.savetxt(save_CO2, process_CO2_f, delimiter='\t')
     
             # save and create plots (shifts)
 #            analysis.stat_utils().save_plots(df=endTidal, O2_time=pre_O2.Time, O2=pre_O2.Data, O2_shift=processed_O2, O2_correlation=O2_corr, O2_shift_f=processed_O2,
 #                                             CO2_time=pre_CO2.Time, CO2=pre_CO2.Data, CO2_shift=processed_CO2, CO2_correlation=CO2_corr, CO2_shift_f=processed_CO2, meants=meants,
 #                                             coeff=coeff, f_path=f_path, key=key, verb=verb, time_points=time_pts, TR=tr)
-            analysis.stat_utils().save_plots(df=endTidal, O2_time=pre_O2.Time, O2=pre_O2.Data, O2_shift=processed_O2, O2_correlation=O2_corr, O2_shift_f=processed_O2_f,
-                                             CO2_time=pre_CO2.Time, CO2=pre_CO2.Data, CO2_shift=processed_CO2, CO2_correlation=CO2_corr, CO2_shift_f=processed_CO2_f, meants=meants,
-                                             coeff=coeff, coeff_f=coeff_f, comb_corr=comb_corr,
-                                             f_path=f_path, key=key, verb=verb, time_points=time_pts, TR=tr)
+            analysis.stat_utils().save_plots_edge(df=endTidal, O2_time=pre_O2.Time, O2=pre_O2.Data, O2_shift=process_O2, O2_shift_f=process_O2_f,
+                                                  CO2_time=pre_CO2.Time, CO2=pre_CO2.Data, CO2_shift=process_CO2, CO2_shift_f=process_CO2_f,
+                                                  coeff=coeff, coeff_f=coeff_f,
+                                                  meants=meants, f_path=f_path, key=key, verb=verb, time_points=time_pts, TR=tr)
+#            analysis.stat_utils().save_plots(df=endTidal, O2_time=pre_O2.Time, O2=pre_O2.Data, O2_shift=processed_O2, O2_correlation=O2_corr, O2_shift_f=processed_O2_f,
+#                                             CO2_time=pre_CO2.Time, CO2=pre_CO2.Data, CO2_shift=processed_CO2, CO2_correlation=CO2_corr, CO2_shift_f=processed_CO2_f, meants=meants,
+#                                             coeff=coeff, coeff_f=coeff_f, comb_corr=comb_corr,
+#                                             f_path=f_path, key=key, verb=verb, time_points=time_pts, TR=tr)
             # analysis.stat_utils().save_plots(df=endTidal, O2=pre_O2, O2_shift=processed_O2, CO2=pre_CO2, CO2_shift=processed_CO2, meants=meants, f_path=graphs_dir+id, key=key, verb=verb, TR=interp_time)
 
     

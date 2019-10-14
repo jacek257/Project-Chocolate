@@ -53,9 +53,11 @@ class fft_analysis:
 
         #if f is between bounds, remove associated power
         for i,f in enumerate(freq_dom):
-            if (f >= f_low and f<= f_high):
+            if (f >= f_low) and (f <= f_high):
                 cp[i] = 0
                 cp[-i] = 0
+
+        
         return np.copy(cp)
 
     def fourier_filter(self, time_series, data, low_f, high_f, tr, time_points):
@@ -110,7 +112,133 @@ class fft_analysis:
 
 class stat_utils:
     """docstring for stat_utils."""
+    
+    def save_plots_edge(self, df, O2_time, O2, O2_shift, O2_shift_f,
+                        CO2_time, CO2, CO2_shift, CO2_shift_f, meants,
+                        coeff, coeff_f,
+                        f_path, key, verb, time_points, TR):
 
+        # set the size of the graphs
+        sns.set(rc={'figure.figsize':(30,20)})
+        plt.rc('legend', fontsize='x-large')
+        plt.rc('xtick', labelsize='x-large')
+        plt.rc('axes', titlesize='x-large')
+
+        # normalize data
+        meants_norm = sg.detrend(meants)
+        meants_norm /= meants_norm.std()
+
+        CO2_norm = sg.detrend(CO2)
+        CO2_norm /= CO2_norm.std()
+
+        CO2_shift_norm = sg.detrend(CO2_shift)
+        CO2_shift_norm /= CO2_shift_norm.std()
+
+        O2_norm = sg.detrend(O2)
+        O2_norm /= O2_norm.std()
+
+        O2_shift_norm = sg.detrend(O2_shift)
+        O2_shift_norm /= O2_shift_norm.std()
+
+        if verb:
+            print('Creating O2 plots to be saved')
+        # create subplots for png file later
+        f, axes = plt.subplots(3, 1)
+
+        sns.lineplot(x='Time', y='O2', data=df, linewidth=1, color='b', ax=axes[0])
+        sns.lineplot(x=O2_time, y=O2, linewidth=2, color='g', ax=axes[0])
+        axes[0].set_title('Processed vs Raw')
+        axes[0].legend(['Raw', 'Processed'], facecolor='w')
+
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1])
+        sns.lineplot(x=O2_time, y=O2_norm, color='g', ax=axes[1])
+        axes[1].set_title('Processed vs BOLD')
+        axes[1].legend(['BOLD', 'Processed'], facecolor='w')
+
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[2])
+        sns.lineplot(x=time_points, y=O2_shift_norm, color='g', ax=axes[2])
+        axes[2].set_title('Shifted vs BOLD')
+        axes[2].legend(['BOLD', 'Shifted'], facecolor='w')
+
+        # save the plot
+        if verb:
+            print('Saving O2 plots for', f_path)
+
+        save_path = save_path = f_path[:-4]+'/' + key + 'O2_graph.png'
+        f.savefig(save_path)
+        if verb:
+            print('Saving complete')
+#        plt.show()
+        f.clf()
+        plt.close(fig=f)
+
+        if verb:
+            print('Creating CO2 plots to be saved')
+        # create subplots for png file later
+        f, axes = plt.subplots(3, 1)
+
+        sns.lineplot(x='Time', y='CO2', data=df, linewidth=1, color='b', ax=axes[0])
+        sns.lineplot(x=O2_time, y=CO2, linewidth=2, color='r', ax=axes[0])
+        axes[0].set_title('Processed vs Raw')
+        axes[0].legend(['Raw', 'Processed'], facecolor='w')
+
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1])
+        sns.lineplot(x=CO2_time, y=CO2_norm, color='r', ax=axes[1])
+        axes[1].set_title('Processed vs BOLD')
+        axes[1].legend(['BOLD', 'Processed'], facecolor='w')
+
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[2])
+        sns.lineplot(x=time_points, y=CO2_shift_norm, color='r', ax=axes[2])
+        axes[2].set_title('Shifted vs BOLD')
+        axes[2].legend(['BOLD', 'Shifted'], facecolor='w')
+
+        # save the plot
+        if verb:
+            print('Saving CO2 plots for', f_path)
+
+        save_path = save_path = f_path[:-4]+'/' + key + 'CO2_graph.png'
+        f.savefig(save_path)
+        if verb:
+            print('Saving complete')
+#        plt.show()
+        f.clf()
+        plt.close(fig=f)
+        
+        if verb:
+            print('Creating regression plot')     
+        sns.set(rc={'figure.figsize':(30,20)})   
+        f, axes = plt.subplots(2, 1)
+        
+        sns.lineplot(x=time_points, y=meants_norm, color='blue', ax=axes[0])
+        predict = coeff[0]*O2_shift + coeff[1]*CO2_shift + coeff[2]
+        predict_norm = sg.detrend(predict)
+        predict_norm /= predict_norm.std()
+        sns.lineplot(x=time_points, y=predict_norm, color='violet', ax=axes[0])
+        axes[0].set_title('First-shift vs BOLD')
+        axes[0].legend(['BOLD', 'First-shift'], facecolor='w')
+
+        sns.lineplot(x=time_points, y=meants_norm, color='blue', ax=axes[1])
+        predict = coeff_f[0]*O2_shift_f + coeff_f[1]*CO2_shift_f + coeff_f[1]
+        predict_norm = sg.detrend(predict)
+        predict_norm /= predict_norm.std()
+        sns.lineplot(x=time_points, y=predict_norm, color='violet', ax=axes[1])
+        axes[1].set_title('Second-shift vs BOLD')
+        axes[1].legend(['BOLD', 'Second-shift'], facecolor='w')
+
+        if verb:
+            print('Saving regression plot for', f_path)
+
+        save_path = save_path = f_path[:-4]+'/' + key + 'regression.png'
+        plt.savefig(save_path)
+        if verb:
+            print('Saving complete')
+#        plt.show()
+        f.clf()
+        plt.close(fig=f)
+        
+        return       
+        
+    
     def save_plots(self, df, O2_time, O2, O2_shift, O2_correlation, O2_shift_f,
                    CO2_time, CO2, CO2_shift, CO2_correlation, CO2_shift_f, meants,
                    coeff, coeff_f, comb_corr,
@@ -679,6 +807,79 @@ class shifter:
     """
     docstring for shifter.
     """
+    def edge_match(self, base, sig, tr, time_pts):
+            
+        pt_shift = 0
+        print(base.Data.mean())
+        print(sig.Data.mean())
+        direct = None
+        prev_direct = None
+        
+        base_match = base[base.Data > base.Data.mean()].reset_index(drop=True)
+        sig_match = sig[sig.Data > sig.Data.mean()].reset_index(drop=True)
+        
+        while True:
+            
+            start_diff = sig_match.Time[0] - base_match.Time[0]
+            end_diff = sig_match.Time[len(sig_match)-1] - base_match.Time[len(base_match)-1]
+            
+            print(sig_match.Time[0], base_match.Time[0], np.abs(start_diff))
+            print(sig_match.Time[len(sig_match)-1], base_match.Time[len(base_match)-1], np.abs(end_diff))
+            print()
+            time.sleep(3)
+            
+            if prev_direct and direct == -prev_direct:
+                break
+            
+            if end_diff < 0 and start_diff < 0:
+                prev_direct = direct
+                direct = 1
+                pt_shift += 1
+                sig_match.Time += tr
+            elif end_diff > 0 and start_diff > 0:
+                prev_direct = direct
+                direct = -1
+                pt_shift -= 1
+                sig_match.Time -= tr
+            elif start_diff > end_diff:
+                prev_direct = direct
+                direct = 1
+                pt_shift += 1
+                sig_match.Time += tr
+            elif end_diff > start_diff:
+                prev_direct = direct
+                direct = -1
+                pt_shift -= 1
+                sig_match.Time -= tr
+            elif prev_direct and direct == -prev_direct:
+                break
+            else:
+                break
+        
+        time_shift = pt_shift * tr
+        
+        resamp = interp.interp1d(sig.Time+time_shift, sig.Data, fill_value='extrapolate')
+        shifted = resamp(time_pts)
+        
+        if pt_shift > 0:
+            shifted[:pt_shift] = sig.Data[0]
+        if pt_shift < 0:
+            shifted[pt_shift:] = sig.Data[len(sig)-1]
+#        
+#        end = len(final) - len(time_points)
+#        final = final[:-end]
+#        
+#        df = pd.DataFrame({ 'Time' : time_points,
+#                            'Data' : final,
+#                            'BOLD' : base})
+        
+        df = pd.DataFrame({ 'Time' : time_pts,
+                            'Data' : shifted,
+                            'BOLD' : base.Data})
+
+#        shifted = sg.savgol_filter(shifted, 11, 3)
+        
+        return df, shifted, time_shift, pt_shift
 
     def get_cross_correlation(self, base, sig, scan_time):
         """
