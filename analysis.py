@@ -52,15 +52,23 @@ class fft_analysis:
         cp = np.copy(power_spectra)
 
         #if f is between bounds, remove associated power
-        for i,f in enumerate(freq_dom):
-            if (f >= f_low) and (f <= f_high):
-                cp[i] = 0
-                cp[-i] = 0
+#        for i,f in enumerate(freq_dom):
+##            if (f >= f_low) and (f <= f_high):
+##                cp[i] = 0
+##                cp[-i] = 0
+#            if f >= f_low:
+#                cp[i] = 0
 
-        
+        b, a = sg.butter(11, f_low, 'low', analog=True)
+        w, h = sg.freqs(b, a)
+        resamp = interp.interp1d(w, h, fill_value='extrapolate')
+        h = resamp(freq_dom)
+        for i,f in enumerate(freq_dom):
+            cp[i] = cp[i] * np.abs(h)[i] if i < len(h) else 0
+            
         return np.copy(cp)
 
-    def fourier_filter(self, time_series, data, low_f, high_f, tr, time_points):
+    def fourier_filter(self, time_series, data, low_f, high_f, tr, time_points, trim):
         """
         Driver module: runs fourier_trans() and my_filter() and downsamples
 
@@ -77,8 +85,8 @@ class fft_analysis:
         pre_invert = self.my_filter(low_f,high_f, freq, power)
         inverted = ifft(pre_invert).real
         
-
-        resample_ts = np.arange(time_series.min(), time_series.max(), tr)
+        resample_ts = np.arange(time_series.min(), time_series.max()+tr, tr)
+#        print(resample_ts)
         resampler = interp.interp1d(time_series, inverted, fill_value="extrapolate")
         
 #        df = pd.DataFrame({'Time' : time_series,
@@ -86,8 +94,9 @@ class fft_analysis:
     
         df = pd.DataFrame({'Time' : resample_ts,
                            'Data' : resampler(resample_ts)})
-        
-        df = stat_utils().trim_edges(df)
+    
+        if trim:
+            df = stat_utils().trim_edges(df)
         
 #        df = df[df.Time > 5].reset_index(drop=True)
 #        df = df[df.Time < df.Time.max()-5].reset_index(drop=True)
@@ -112,6 +121,64 @@ class fft_analysis:
 
 class stat_utils:
     """docstring for stat_utils."""
+    
+    def save_plots_comb_only(self, df, O2, O2_f, 
+                   CO2, CO2_f, meants,
+                   coeff, coeff_f, comb_corr,
+                   f_path, key, verb, time_points, TR):
+        
+        if verb:
+            print('Creating regression plot')
+        
+        # set the size of the graphs
+        sns.set(rc={'figure.figsize':(30,20)})
+        plt.rc('legend', fontsize='x-large')
+        plt.rc('xtick', labelsize='x-large')
+        plt.rc('axes', titlesize='x-large')
+
+        # normalize data
+        meants_norm = sg.detrend(meants)
+        meants_norm /= meants_norm.std()
+#        sns.lineplot(x=time_points, y=meants_norm, color='blue', ax=axes[0])
+#        predict = coeff[0]*O2_shift + coeff[1]*CO2_shift + coeff[2]
+#        predict_norm = sg.detrend(predict)
+#        predict_norm /= predict_norm.std()
+#        sns.lineplot(x=time_points, y=predict_norm, color='violet', ax=axes[0])
+        
+        f, axes = plt.subplots(3, 1)
+        
+        sns.lineplot(x=time_points, y=meants_norm, color='blue', ax=axes[0])
+        predict = coeff[0]*O2 + coeff[1]*CO2 + coeff[2]
+        predict_norm = sg.detrend(predict)
+        predict_norm /= predict_norm.std()
+        sns.lineplot(x=time_points, y=predict_norm[:len(meants)], color='black', ax=axes[0])
+        axes[0].set_title('No-shift vs BOLD')
+        axes[0].legend(['BOLD', 'No-shift'], facecolor='w')
+        
+        sns.lineplot(x=np.arange(-len(comb_corr)//2, len(comb_corr)//2)+1, y=comb_corr, ax=axes[1])
+        axes[1].set_title('Cross-Correlation')
+        axes[1].legend(['Cross-Correlation'], facecolor='w')
+
+        sns.lineplot(x=time_points, y=meants_norm, color='blue', ax=axes[2])
+        predict = coeff_f[0]*O2_f + coeff_f[1]*CO2_f + coeff_f[2]
+        predict_norm = sg.detrend(predict)
+        predict_norm /= predict_norm.std()
+        sns.lineplot(x=time_points, y=predict_norm, color='black', ax=axes[2])
+        axes[2].set_title('With-shift vs BOLD')
+        axes[2].legend(['BOLD', 'With-shift'], facecolor='w')
+
+        if verb:
+            print('Saving regression plot for', f_path)
+
+        save_path = save_path = f_path[:-4]+'/' + key + 'regression.png'
+        plt.savefig(save_path)
+        if verb:
+            print('Saving complete')
+#        plt.show()
+        f.clf()
+        plt.close(fig=f)
+        
+        return
     
     def save_plots_edge(self, df, O2_time, O2, O2_shift, O2_shift_f,
                         CO2_time, CO2, CO2_shift, CO2_shift_f, meants,
@@ -439,12 +506,20 @@ class stat_utils:
 #        sig_fit = sg.savgol_filter(sig_fit, 11, 3)
 #        sig_fit = sg.detrend(sig_fit)
 #        sig_fit /= sig_fit.std()
-        
+#        sig_cut = []
+#        
+#        for sig in sigs:
+#            sig_cut.append(sig[:len(sig_fit)])
+#            
+#        print(len(sig_cut[0]))
         X = np.vstack((np.array(sigs), np.ones_like(sigs[0]))).T
-#        print(X)
+#        print(len(X))
         
 #        clf = SGD(loss='huber', alpha=0.001, max_iter=2e9, tol=1e-6, learning_rate='optimal', shuffle=True, fit_intercept=True)
         clf = Ridge(alpha=0.001, max_iter=2e9, tol=1e-6, fit_intercept=True, normalize=False, solver='sag', copy_X=True)
+        
+#        diff = len(sigs[0]) - len(sig_fit)
+#        sig_fit = pd.concat((sig_fit, pd.Series([0] * diff)))
         
         clf.fit(X, sig_fit)
 #        print(clf.coef_)
@@ -526,10 +601,9 @@ class stat_utils:
     def trim_edges(self, df):
         
         i = len(df)-1
-        count = 1
         change = abs((df.Data[i-1] - df.Data[i]))
 #        print(slope)
-        i -= 1
+        count = 0
         
 #        print(change)
         while(df.Time[i] > df.Time.max()*0.9):
@@ -537,18 +611,17 @@ class stat_utils:
             change = abs((df.Data[i-1] - df.Data[i]))
             diff = abs(change-pre_change)
 #            print(diff)
-            if diff > 0 and diff < 5e-2:
-                count += 1
-                i -= 1
-            else:
+            if diff > 5e-2:
                 break
+            count += 1
+            i -= 1
+        
         df.Data[len(df)-count:] = df.Data[len(df)-count]
 
         i = 0
-        count = 1
+        count = 0
         change = abs((df.Data[i+1] - df.Data[i]))
 #        print(slope)
-        i += 1
         
 #        print(change)
         while(df.Time[i] < df.Time.max()*0.1):
@@ -556,11 +629,11 @@ class stat_utils:
             change = abs((df.Data[i+1] - df.Data[i]))
             diff = abs(change-pre_change)
 #            print(diff)
-            if diff > 0 and diff < 5e-2:
-                count += 1
-                i += 1
-            else:
+            if diff > 5e-2:
                 break
+            count += 1
+            i += 1
+        
         df.Data[:count] = df.Data[count]
         
         return df
@@ -810,8 +883,8 @@ class shifter:
     def edge_match(self, base, sig, tr, time_pts):
             
         pt_shift = 0
-        print(base.Data.mean())
-        print(sig.Data.mean())
+#        print(base.Data.mean())
+#        print(sig.Data.mean())
         direct = None
         prev_direct = None
         
@@ -823,10 +896,10 @@ class shifter:
             start_diff = sig_match.Time[0] - base_match.Time[0]
             end_diff = sig_match.Time[len(sig_match)-1] - base_match.Time[len(base_match)-1]
             
-            print(sig_match.Time[0], base_match.Time[0], np.abs(start_diff))
-            print(sig_match.Time[len(sig_match)-1], base_match.Time[len(base_match)-1], np.abs(end_diff))
-            print()
-            time.sleep(3)
+#            print(sig_match.Time[0], base_match.Time[0], np.abs(start_diff))
+#            print(sig_match.Time[len(sig_match)-1], base_match.Time[len(base_match)-1], np.abs(end_diff))
+#            print()
+#            time.sleep(3)
             
             if prev_direct and direct == -prev_direct:
                 break
@@ -890,7 +963,7 @@ class shifter:
         Returns:
             (float) : shift value of signal
         """
-#        limit = int(15 * len(base)/scan_time)
+#        limit = int(30 * len(base)/scan_time)
         correlation_series = sg.correlate(base, sig, mode='full')
 #        lim_corr = correlation_series[len(correlation_series)//2-limit : len(correlation_series)//2+limit+1]
         

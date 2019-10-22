@@ -140,16 +140,16 @@ for i in range(len(p_df)):
 
     patient_dir = patient_dir[0] # patient dir is a list of len 1, need to actual string
     #get all matching files
-    b_files = [file for file in os.listdir(patient_dir + '/BOLD/') if file.endswith('.nii')]
+    b_files = [file for file in os.listdir(patient_dir + '/BOLD/') if file.endswith('.nii') and len(file.split('_')) == 3]
     
 #    fs_files = [file for file in os.listdir(freesurfer_t1_dir) if file == p_df.Cohort[i]+p_df.ID[i]+'_FS_T1.nii.gz']
 #    print(p_df.Cohort[i]+'*'+p_df.ID[i]+'_'+p_df.Date[i]+'_FS_TI.nii*')
-    fs_files = [file for file in os.listdir(freesurfer_t1_dir)  if fnmatch.fnmatch(file, p_df.Cohort[i]+'*'+p_df.ID[i]+'_'+p_df.Date[i]+'_FS_T1.nii*')]
+    fs_files = [file for file in os.listdir(freesurfer_t1_dir)  if fnmatch.fnmatch(file, p_df.Cohort[i]+'*'+p_df.ID[i]+'_'+p_df.Date[i]+'*_T1.nii*')]
 #    for file in os.listdir(freesurfer_t1_dir):
 #        print(file)
 #    exit()
     if not fs_files:
-        fs_files = [file for file in os.listdir(freesurfer_t1_dir) if fnmatch.fnmatch(file, p_df.Cohort[i]+p_df.ID[i]+'_FS_T1.nii*')]
+        fs_files = [file for file in os.listdir(freesurfer_t1_dir) if fnmatch.fnmatch(file, p_df.Cohort[i]+p_df.ID[i]+'*_T1.nii*')]
 
     #select and add file to appropriate list
     b_temp = patient_dir +'/BOLD/'+b_files[0] if len(b_files) > 0 else ''
@@ -243,6 +243,7 @@ tr_dict = {'TR' : [], 'eff_TR' : [] }
 for b_path in p_df.BOLD_path:
 #    print(b_path[:-4]+'.json')
     with open(b_path[:-4]+'.json', 'r') as j_file:
+#        print(j_file)
         data = json.load(j_file)
         #print(data['RepetitionTime'])
         tr = data['RepetitionTime']
@@ -271,7 +272,7 @@ for i in range(len(warning)):
     warnings['warning'].append('TR != 1.5')
     print('\t\t' + warning.iloc[i].Cohort + warning.iloc[i].ID + '_' + warning.iloc[i].Date + ' has a TR != 1.5')
     
-p_df = p_df[p_df.TR == 1.5]
+#p_df = p_df[p_df.TR == 1.5]
 
 #choose non-trivial bold series
 #warning_2 = p_df[p_df.Volumes < 150]
@@ -330,7 +331,7 @@ for typ in ['four']:
         key = 'p_'
     
     ET_dict = {'ETO2' : [], 'ETCO2' : [], 'ET_exists' : [], 'Cohort' : [], 'ID' : [], 'Date' : [],
-               'O2_shift' : [], 'CO2_shift' : [], 'coeffs' : [], 'r' : [], 'p_value' : []}
+               'O2_shift' : [], 'CO2_shift' : [], 'coeffs' : [], 'r' : [], 'p_value' : [], 'crossing' : []}
     
     to_drop = []
     
@@ -414,11 +415,26 @@ for typ in ['four']:
         endTidal = endTidal[:i].reset_index(drop=True)
         
         meants = signal.detrend(meants)
-        meants = signal.savgol_filter(meants, 7, 3)
+#        meants = signal.savgol_filter(meants, 11, 3)
+#        print(len(meants))
+        
+        meants_df = analysis.fft_analysis().fourier_filter(time_pts, meants, 1/60, 10, tr, time_pts, trim=False)
+        meants = meants_df.Data
+#        print(len(meants))
+        time_pts = meants_df.Time
+            
+#        print(len(meants), len(time_pts))
         
 #        endTidal.CO2 = signal.savgol_filter(endTidal.CO2, 35, 3)
         endTidal.CO2 = signal.detrend(endTidal.CO2)
         endTidal.O2 = signal.detrend(endTidal.O2)
+        
+        smooth = signal.savgol_filter(endTidal.CO2, 35, 3)
+        down = smooth - smooth.std()/2
+
+        
+        zero_crossings = len(np.where(np.diff(np.sign(down)))[0])
+        ET_dict['crossing'].append(zero_crossings)
         
 #        plt.plot(endTidal.CO2)
 #        plt.show()
@@ -429,9 +445,9 @@ for typ in ['four']:
             if verb:
                 print('Starting fourier for', cohort + id + '_' + date)
             #get fourier cleaned data
-            pre_O2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.O2, 3/60, 25/60, tr, time_pts)
+            pre_O2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.O2, 1/60, 25/60, tr, time_pts, trim=True)
 #            pre_O2.Data = signal.savgol_filter(pre_O2.Data, 5, 3)
-            pre_CO2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.CO2, 3/60, 25/60, tr, time_pts)
+            pre_CO2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.CO2, 1/60, 25/60, tr, time_pts, trim=True)
 #            pre_CO2.Data = signal.savgol_filter(pre_CO2.Data, 5, 3)
         elif block:
             if verb:
@@ -471,29 +487,37 @@ for typ in ['four']:
 #        sns.lineplot(x='Time', y='meants', data=all_CO2)
 #        plt.show()
 #        exit()
-        
-#        full_O2, processed_O2, O2_corr, O2_shift, O2_start = analysis.shifter().corr_align(meants, pre_O2.Time, pre_O2.Data, scan_time, time_pts)
+#        
+        full_O2, processed_O2, O2_corr, O2_shift, O2_start = analysis.shifter().corr_align(meants, pre_O2.Time, pre_O2.Data, scan_time, time_pts)
 #        O2_shift = comb_shift
 #        ET_dict['O2_shift'].append(O2_shift)
-#        full_CO2, processed_CO2, CO2_corr, CO2_shift, CO2_start = analysis.shifter().corr_align(meants, pre_CO2.Time, pre_CO2.Data, scan_time, time_pts)
+        full_CO2, processed_CO2, CO2_corr, CO2_shift, CO2_start = analysis.shifter().corr_align(meants, pre_CO2.Time, pre_CO2.Data, scan_time, time_pts)
 #        CO2_shift = comb_shift
 #        ET_dict['CO2_shift'].append(CO2_shift)
-        
+#        
 #        processed_comb = processed_O2 * processed_CO2
         
 #        full_O2.to_excel(id+'_'+key+'all_O2.xlsx', index=False)
 #        full_CO2.to_excel(id+'_'+key+'all_CO2.xlsx', index=False)
-#        coeff, r, p_value = analysis.stat_utils().get_info([processed_O2, processed_CO2], meants)
+#        coeff, r, p_value = analysis.stat_utils().get_info([pre_O2.Data, pre_CO2.Data], meants)
+        coeff, r, p_value = analysis.stat_utils().get_info([processed_O2, processed_CO2], meants)
+        
+#        combined = coeff[0] * pre_O2.Data + coeff[1] * pre_CO2.Data + coeff[2]
+#        full_comb, processed_comb, comb_corr, comb_shift, comb_start = analysis.shifter().corr_align(meants, pre_CO2.Time, combined, scan_time, time_pts)
+#        O2_shift = comb_shift
+#        CO2_shift = comb_shift
+        combined = coeff[0] * processed_O2 + coeff[1] * processed_CO2 + coeff[2]
+        full_comb, processed_comb, comb_corr, comb_shift, comb_start = analysis.shifter().corr_align(meants, time_pts, combined, scan_time, time_pts)
+        O2_shift += comb_shift
+        CO2_shift += comb_shift
 #        
-#        combined = coeff[0] * processed_O2 + coeff[1] * processed_CO2 + coeff[2]
-#        full_comb, processed_comb, comb_corr, comb_shift, comb_start = analysis.shifter().corr_align(meants, time_pts, combined, scan_time, time_pts)
-#        O2_shift += comb_shift
-#        CO2_shift += comb_shift
-#        
-#        processed_O2_f = analysis.stat_utils().resamp(pre_O2.Time + O2_shift, time_pts, pre_O2.Data, O2_shift, O2_start+comb_start)
-#        processed_CO2_f = analysis.stat_utils().resamp(pre_CO2.Time + CO2_shift, time_pts, pre_CO2.Data, CO2_shift, CO2_start+comb_start)
-#        
-#        coeff_f, r, p_value = analysis.stat_utils().get_info([processed_O2_f, processed_CO2_f], meants)
+#        processed_O2_f = analysis.stat_utils().resamp(pre_O2.Time + O2_shift, time_pts, pre_O2.Data, O2_shift, comb_start)
+#        processed_CO2_f = analysis.stat_utils().resamp(pre_CO2.Time + CO2_shift, time_pts, pre_CO2.Data, CO2_shift, comb_start)
+        
+        processed_O2_f = analysis.stat_utils().resamp(pre_O2.Time + O2_shift, time_pts, pre_O2.Data, O2_shift, O2_start+comb_start)
+        processed_CO2_f = analysis.stat_utils().resamp(pre_CO2.Time + CO2_shift, time_pts, pre_CO2.Data, CO2_shift, CO2_start+comb_start)
+        
+        coeff_f, r, p_value = analysis.stat_utils().get_info([processed_O2_f, processed_CO2_f], meants)
         
 #        trim_O2 = pre_O2.Data[:len(meants)]
 #        tirm_CO2 = pre_CO2.Data[:len(meants)]
@@ -509,30 +533,30 @@ for typ in ['four']:
 #        
 #        processed_O2 = analysis.stat_utils().resamp(pre_O2.Time + O2_shift, time_pts, pre_O2.Data, O2_shift, comb_idx)
 #        processed_CO2 = analysis.stat_utils().resamp(pre_CO2.Time + CO2_shift, time_pts, pre_CO2.Data, CO2_shift, comb_idx)        
-        
-        if verb:
-            print('Shifting')
-        meants_df = pd.DataFrame({'Time' : time_pts,
-                                  'Data' : meants})
-        O2_df, process_O2, O2_shift, O2_start = analysis.shifter().edge_match(meants_df, pre_O2, tr, time_pts)
-        CO2_df, process_CO2, CO2_shift, CO2_start = analysis.shifter().edge_match(meants_df, pre_CO2, tr, time_pts)
-        
-        coeff, r, p_value = analysis.stat_utils().get_info([process_O2, process_CO2], meants)
-        
-        if verb:
-            print('Combining')
-        comb_data = coeff[0] * process_O2 + coeff[1] * process_CO2 + coeff[2]
-        comb_time = time_pts
-        comb_df, process_comb, comb_shift, comb_start = analysis.shifter().edge_match(meants_df, pd.DataFrame({'Time' : comb_time, 'Data' : comb_data}), tr, time_pts)
-        O2_shift += comb_shift
-        CO2_shift += comb_shift
-        
-        if verb:
-            print('Shifting again')
-        process_O2_f = analysis.stat_utils().resamp(pre_O2.Time + O2_shift, time_pts, pre_O2.Data, O2_shift, O2_start+comb_start)
-        process_CO2_f = analysis.stat_utils().resamp(pre_CO2.Time + CO2_shift, time_pts, pre_CO2.Data, CO2_shift, CO2_start+comb_start)
-        
-        coeff_f, r, p_value = analysis.stat_utils().get_info([process_O2_f, process_CO2_f], meants)
+#        
+#        if verb:
+#            print('Shifting')
+#        meants_df = pd.DataFrame({'Time' : time_pts,
+#                                  'Data' : meants})
+#        O2_df, process_O2, O2_shift, O2_start = analysis.shifter().edge_match(meants_df, pre_O2, tr, time_pts)
+#        CO2_df, process_CO2, CO2_shift, CO2_start = analysis.shifter().edge_match(meants_df, pre_CO2, tr, time_pts)
+#        
+#        coeff, r, p_value = analysis.stat_utils().get_info([process_O2, process_CO2], meants)
+#        
+#        if verb:
+#            print('Combining')
+#        comb_data = coeff[0] * process_O2 + coeff[1] * process_CO2 + coeff[2]
+#        comb_time = time_pts
+#        comb_df, process_comb, comb_shift, comb_start = analysis.shifter().edge_match(meants_df, pd.DataFrame({'Time' : comb_time, 'Data' : comb_data}), tr, time_pts)
+#        O2_shift += comb_shift
+#        CO2_shift += comb_shift
+#        
+#        if verb:
+#            print('Shifting again')
+#        process_O2_f = analysis.stat_utils().resamp(pre_O2.Time + O2_shift, time_pts, pre_O2.Data, O2_shift, O2_start+comb_start)
+#        process_CO2_f = analysis.stat_utils().resamp(pre_CO2.Time + CO2_shift, time_pts, pre_CO2.Data, CO2_shift, CO2_start+comb_start)
+#        
+#        coeff_f, r, p_value = analysis.stat_utils().get_info([process_O2_f, process_CO2_f], meants)
 
         ET_dict['O2_shift'].append(O2_shift)
         ET_dict['CO2_shift'].append(CO2_shift)
@@ -560,23 +584,27 @@ for typ in ['four']:
             #save data
 #            np.savetxt(save_O2, processed_O2, delimiter='\t')
 #            np.savetxt(save_CO2, processed_CO2, delimiter='\t')
-#            np.savetxt(save_O2, processed_O2_f, delimiter='\t')
-#            np.savetxt(save_CO2, processed_CO2_f, delimiter='\t')
-            np.savetxt(save_O2, process_O2_f, delimiter='\t')
-            np.savetxt(save_CO2, process_CO2_f, delimiter='\t')
+            np.savetxt(save_O2, processed_O2_f, delimiter='\t')
+            np.savetxt(save_CO2, processed_CO2_f, delimiter='\t')
+#            np.savetxt(save_O2, process_O2_f, delimiter='\t')
+#            np.savetxt(save_CO2, process_CO2_f, delimiter='\t')
     
             # save and create plots (shifts)
+#            analysis.stat_utils().save_plots_comb_only(df=endTidal, O2=pre_O2.Data, O2_f=processed_O2_f,
+#                                                       CO2=pre_CO2.Data, CO2_f=processed_CO2_f, meants=meants,
+#                                                       coeff=coeff, coeff_f=coeff_f, comb_corr=comb_corr,
+#                                                       f_path=f_path, key=key, verb=verb, time_points=time_pts, TR=tr)
 #            analysis.stat_utils().save_plots(df=endTidal, O2_time=pre_O2.Time, O2=pre_O2.Data, O2_shift=processed_O2, O2_correlation=O2_corr, O2_shift_f=processed_O2,
 #                                             CO2_time=pre_CO2.Time, CO2=pre_CO2.Data, CO2_shift=processed_CO2, CO2_correlation=CO2_corr, CO2_shift_f=processed_CO2, meants=meants,
 #                                             coeff=coeff, f_path=f_path, key=key, verb=verb, time_points=time_pts, TR=tr)
-            analysis.stat_utils().save_plots_edge(df=endTidal, O2_time=pre_O2.Time, O2=pre_O2.Data, O2_shift=process_O2, O2_shift_f=process_O2_f,
-                                                  CO2_time=pre_CO2.Time, CO2=pre_CO2.Data, CO2_shift=process_CO2, CO2_shift_f=process_CO2_f,
-                                                  coeff=coeff, coeff_f=coeff_f,
-                                                  meants=meants, f_path=f_path, key=key, verb=verb, time_points=time_pts, TR=tr)
-#            analysis.stat_utils().save_plots(df=endTidal, O2_time=pre_O2.Time, O2=pre_O2.Data, O2_shift=processed_O2, O2_correlation=O2_corr, O2_shift_f=processed_O2_f,
-#                                             CO2_time=pre_CO2.Time, CO2=pre_CO2.Data, CO2_shift=processed_CO2, CO2_correlation=CO2_corr, CO2_shift_f=processed_CO2_f, meants=meants,
-#                                             coeff=coeff, coeff_f=coeff_f, comb_corr=comb_corr,
-#                                             f_path=f_path, key=key, verb=verb, time_points=time_pts, TR=tr)
+#            analysis.stat_utils().save_plots_edge(df=endTidal, O2_time=pre_O2.Time, O2=pre_O2.Data, O2_shift=process_O2, O2_shift_f=process_O2_f,
+#                                                  CO2_time=pre_CO2.Time, CO2=pre_CO2.Data, CO2_shift=process_CO2, CO2_shift_f=process_CO2_f,
+#                                                  coeff=coeff, coeff_f=coeff_f,
+#                                                  meants=meants, f_path=f_path, key=key, verb=verb, time_points=time_pts, TR=tr)
+            analysis.stat_utils().save_plots(df=endTidal, O2_time=pre_O2.Time, O2=pre_O2.Data, O2_shift=processed_O2, O2_correlation=O2_corr, O2_shift_f=processed_O2_f,
+                                             CO2_time=pre_CO2.Time, CO2=pre_CO2.Data, CO2_shift=processed_CO2, CO2_correlation=CO2_corr, CO2_shift_f=processed_CO2_f, meants=meants,
+                                             coeff=coeff, coeff_f=coeff_f, comb_corr=comb_corr,
+                                             f_path=f_path, key=key, verb=verb, time_points=time_pts, TR=tr)
             # analysis.stat_utils().save_plots(df=endTidal, O2=pre_O2, O2_shift=processed_O2, CO2=pre_CO2, CO2_shift=processed_CO2, meants=meants, f_path=graphs_dir+id, key=key, verb=verb, TR=interp_time)
 
     
@@ -786,6 +814,7 @@ for typ in ['four']:
 #        build['p_value'] = df.p_value[i]
         
         build = pd.DataFrame({'ID' : [df.Cohort[i]+df.ID[i]+'_'+df.Date[i]],
+                              'Cross' : [df.crossing[i]],
                               'O2_shift' : [df.O2_shift[i]],
                               'CO2_shift' : [df.CO2_shift[i]],
                               'O2_coeff' : [df.coeffs[i][0]],
