@@ -17,6 +17,7 @@ import multiprocessing
 import matplotlib.pyplot as plt
 import seaborn as sns
 import scipy.stats as st
+import scipy.interpolate as interp
 import fnmatch
 
 # instantiate the argument parser
@@ -32,6 +33,7 @@ parser.add_argument("-b", "--block", action='store_true', help='switch analysis 
 parser.add_argument("-t", "--CO2_trough", action='store_true', help='switch CO2 peak finding to troughs')
 parser.add_argument("-o", "--overwrite", action='store_true', help='overwrite existing processed gas data')
 parser.add_argument("-m", "--manual", action='store_true', help='switch analysis to manual')
+parser.add_argument("-s", "--sh", action='store_true', help='process SH cohort')
 parser.add_argument("-w", "--wh", action='store_true', help='process WH cohort')
 
 
@@ -45,18 +47,22 @@ trough = True if args.CO2_trough else False
 over = True if args.overwrite else False
 block = True if args.block else False
 man = True if args.manual else False
+sh = True if args.sh else False
 wh = True if args.wh else False
 
 ###########set directories (TODO, automate)
 home_dir = '/media/ke/8tb_part2/FSL_work/'
-if not wh:
+if sh:
     nifti_dir = '/media/ke/8tb_part2/FSL_work/SH_info/'
     processed_dir = '/media/ke/8tb_part2/FSL_work/SH_info/BOLD_processed'
     freesurfer_t1_dir = '/media/ke/8tb_part2/FSL_work/SH_FST1/'
-else:
+elif wh:
     nifti_dir = '/media/ke/8tb_part2/FSL_work/WH_info/'
     processed_dir = '/media/ke/8tb_part2/FSL_work/WH_info/BOLD_processed'
     freesurfer_t1_dir = '/media/ke/8tb_part2/FSL_work/WH_FST1/'
+else:
+    nifti_dir = '/media/ke/8tb_part2/FSL_work/all_info/'
+    freesurfer_t1_dir = '/media/ke/8tb_part2/FSL_work/all_T1/'
     
 feat_dir = '/media/ke/8tb_part2/FSL_work/feat/'
     
@@ -79,20 +85,18 @@ txt_files = [file for file in os.listdir(path) if file.upper().endswith('EDITS.T
 if verb:
     print("Constructing dataframe for patients")
 #separate patient ID and scan date and pack into dictionary
-p_dic = {'Cohort' : [],
-         'ID' : [],
+p_dic = {'ID' : [],
          'Date' : [],
          'EndTidal_Path' : []}
 for f in txt_files:
     file = f.split('_')
-    p_dic['Cohort'].append(file[0].upper())
-    p_dic['ID'].append(file[1])
+    p_id = file[0].upper() + file[1]
+    p_dic['ID'].append(p_id)
     p_dic['Date'].append(file[2])
     p_dic['EndTidal_Path'].append(path+f)
 
 p_df = pd.DataFrame(p_dic)
 #p_df = pd.DataFrame({
-#                'Cohort':[f[0:2] for f in txt_files],
 #                'ID':[f[3:6] for f in txt_files],
 #                'Month':[f[11:13] for f in txt_files],
 #                'Day':[f[13:15] for f in txt_files],
@@ -103,9 +107,9 @@ p_df = pd.DataFrame(p_dic)
 
 #print(p_df.head())
 #create patient bold scan listdir (is a list not DataFrame)
-#patient_BOLDS_header = [p_df.Cohort[i]+p_df.ID[i]+'_BOLD_'+p_df.Year[i]+p_df.Month[i]+p_df.Day[i]
+#patient_BOLDS_header = [p_df.ID[i]+'_BOLD_'+p_df.Year[i]+p_df.Month[i]+p_df.Day[i]
 #                    for i in range(len(p_df))]
-patient_BOLDS_header = [p_df.Cohort[i]+p_df.ID[i]+'_BOLD_'+p_df.Date[i]
+patient_BOLDS_header = [p_df.ID[i]+'_BOLD_'+p_df.Date[i]
                     for i in range(len(p_df))]
 
 if verb:
@@ -114,16 +118,16 @@ if verb:
 nii_paths = {'BOLD_path' : [], 'BOLD_corrected_path': [], 'T1_path' : [], 'meants_path': [], 'Processed_path': [], 'boldFS_exists': []}
 for i in range(len(p_df)):
     if verb:
-        print('\tGetting paths relavent to',p_df.Cohort[i] + p_df.ID[i] + '_' + p_df.Date[i])
+        print('\tGetting paths relavent to',p_df.ID[i] + '_' + p_df.Date[i])
     
     #if bold file doesnt exist then continue
-    patient_dir = glob.glob(nifti_dir + p_df.Cohort[i] + p_df.ID[i] + '*' + p_df.Date[i])
+    patient_dir = glob.glob(nifti_dir + p_df.ID[i] + '*' + p_df.Date[i])
     if len(patient_dir) == 0 or not os.path.exists(patient_dir[0] + '/BOLD/'):
         date = p_df.Date[i][-4:] + p_df.Date[i][:-4]
-        patient_dir = glob.glob(nifti_dir + p_df.Cohort[i] + p_df.ID[i] + '*' + date)
+        patient_dir = glob.glob(nifti_dir + p_df.ID[i] + '*' + date)
         if len(patient_dir) == 0 or not os.path.exists(patient_dir[0] + '/BOLD/'):
             
-            warnings['ID'].append(p_df.Cohort[i] + p_df.ID[i] + '_' + p_df.Date[i])
+            warnings['ID'].append(p_df.ID[i] + '_' + p_df.Date[i])
             warnings['warning'].append('No BOLD folder')
             
             nii_paths['BOLD_path'].append('')
@@ -142,14 +146,22 @@ for i in range(len(p_df)):
     #get all matching files
     b_files = [file for file in os.listdir(patient_dir + '/BOLD/') if file.endswith('.nii') and len(file.split('_')) == 3]
     
-#    fs_files = [file for file in os.listdir(freesurfer_t1_dir) if file == p_df.Cohort[i]+p_df.ID[i]+'_FS_T1.nii.gz']
-#    print(p_df.Cohort[i]+'*'+p_df.ID[i]+'_'+p_df.Date[i]+'_FS_TI.nii*')
-    fs_files = [file for file in os.listdir(freesurfer_t1_dir)  if fnmatch.fnmatch(file, p_df.Cohort[i]+'*'+p_df.ID[i]+'_'+p_df.Date[i]+'*_T1.nii*')]
+#    fs_files = [file for file in os.listdir(freesurfer_t1_dir) if file == p_df.ID[i]+'_FS_T1.nii.gz']
+#    print('*'+p_df.ID[i]+'_'+p_df.Date[i]+'_FS_TI.nii*')
+    fs_files = [file for file in os.listdir(freesurfer_t1_dir)  if fnmatch.fnmatch(file, p_df.ID[i]+'_'+p_df.Date[i]+'*_T1.nii*')]
 #    for file in os.listdir(freesurfer_t1_dir):
 #        print(file)
 #    exit()
     if not fs_files:
-        fs_files = [file for file in os.listdir(freesurfer_t1_dir) if fnmatch.fnmatch(file, p_df.Cohort[i]+p_df.ID[i]+'*_T1.nii*')]
+        fs_files = [file for file in os.listdir(freesurfer_t1_dir) if fnmatch.fnmatch(file, p_df.ID[i]+'*_T1.nii*')]
+    
+    if not fs_files:
+        fs_files = ['/usr/local/fsl/data/standard/MNI152_T1_2mm_brain']
+        warnings['ID'].append(p_df.ID[i] + '_' + p_df.Date[i])
+        warnings['warning'].append('No FS_T1 file, using MNI152_T1_2mm_brain atlas')
+        if verb:
+            print('\t\tNo corresponding FS_T1 file, using MNI152_T1_2mm_brain atlas')
+        
 
     #select and add file to appropriate list
     b_temp = patient_dir +'/BOLD/'+b_files[0] if len(b_files) > 0 else ''
@@ -160,12 +172,6 @@ for i in range(len(p_df)):
     nii_paths['boldFS_exists'].append(len(b_files) > 0 and len(fs_files)>0)
     
 #    print(fs_files)
-    
-    if len(fs_files) == 0:
-        warnings['ID'].append(p_df.Cohort[i] + p_df.ID[i] + '_' + p_df.Date[i])
-        warnings['warning'].append('No FS_T1 file')
-        if verb:
-            print('\t\tNo corresponding FS_T1 file')
 
     if(len(b_files) > 0):
         #construct the processed nifti directory
@@ -211,7 +217,7 @@ for i in range(len(p_df)):
                 print('\t\tNo meants. Creating meants')
             subprocess.run(['fslmeants', '-i', brain_path, '-o', meants_path])
     else:
-        warnings['ID'].append(p_df.Cohort[i] + p_df.ID[i] + '_' + p_df.Date[i])
+        warnings['ID'].append(p_df.ID[i] + '_' + p_df.Date[i])
         warnings['warning'].append('No BOLD file')
         
         nii_paths['Processed_path'].append('')
@@ -238,20 +244,28 @@ p_df = p_df.reset_index(drop=True)
 if verb:
     print('Getting the TR for each patient')
 #get json files and read CSV
-tr_dict = {'TR' : [], 'eff_TR' : [] }
+tr_dict = {'ID' : [], 'Date': [], 'TR' : [], 'eff_TR' : [] }
 
 for b_path in p_df.BOLD_path:
 #    print(b_path[:-4]+'.json')
-    with open(b_path[:-4]+'.json', 'r') as j_file:
-#        print(j_file)
-        data = json.load(j_file)
-        #print(data['RepetitionTime'])
-        tr = data['RepetitionTime']
-        tr_dict['TR'].append(tr)
-        eff_tr = tr * 2 if tr < 1.5 else 1.5
-        tr_dict['eff_TR'].append(eff_tr)
+    p_id = b_path.split('/')[6].split('_')
+    try:
+        with open(b_path[:-4]+'.json', 'r') as j_file:
+    #        print(j_file)
+            data = json.load(j_file)
+            #print(data['RepetitionTime'])
+            tr_dict['ID'].append(p_id[0])
+            tr_dict['Date'].append(p_id[2])
+            tr = data['RepetitionTime']
+            tr_dict['TR'].append(tr)
+            eff_tr = tr * 2 if tr < 1.5 else tr
+            tr_dict['eff_TR'].append(eff_tr)
+    except:
+        print('\t\t'+p_id[0]+'_'+p_id[2]+' has a bad json file. Cannot read')
+        warnings['ID'].append(p_id[0]+'_'+p_id[2])
+        warnings['warning'].append('Has a bad json file. Cannot read')
 
-p_df = pd.concat((p_df, pd.DataFrame(tr_dict)), axis=1)
+p_df = p_df.merge(pd.DataFrame(tr_dict), on=['ID', 'Date'])
 #print('\n',p_df)
 
 #get number of volumes
@@ -268,16 +282,16 @@ warning = warning.reset_index(drop=True)
 #print(warning)
 for i in range(len(warning)):
 #    print(i)
-    warnings['ID'].append(warning.Cohort[i] + warning.ID[i] + '_' + warning.Date[i])
+    warnings['ID'].append(warning.ID[i] + '_' + warning.Date[i])
     warnings['warning'].append('TR != 1.5')
-    print('\t\t' + warning.iloc[i].Cohort + warning.iloc[i].ID + '_' + warning.iloc[i].Date + ' has a TR != 1.5')
+    print('\t\t' + warning.iloc[i].ID + '_' + warning.iloc[i].Date + ' has a TR != 1.5')
     
 #p_df = p_df[p_df.TR == 1.5]
 
 #choose non-trivial bold series
 #warning_2 = p_df[p_df.Volumes < 150]
 #for i in range(len(warning_2)):
-#    print('\t\t' + warning_2[i].Cohort + warning_2[i].ID + '_' + warning_2[i].Date + 'has a total volume < 150')
+#    print('\t\t' + warning_2[i].ID + '_' + warning_2[i].Date + 'has a total volume < 150')
 #print('\np_df w/ dim > 150\n',p_df.head())
 
 ####run EndTidal Cleaning and return paths
@@ -299,6 +313,13 @@ stats_df = pd.DataFrame()
 #for typ in ['four', 'peak', 'trough', 'block']:
 #for typ in ['four', 'peak', 'trough']:
 #for typ in ['peak', 'trough']:
+    
+
+#sns.set(rc={'figure.figsize':(30,20)})
+#plt.rc('legend', fontsize='x-large')
+#plt.rc('xtick', labelsize='x-large')
+#plt.rc('axes', titlesize='x-large')
+
 for typ in ['four']:
     if typ == 'four':
         four = True
@@ -330,14 +351,23 @@ for typ in ['four']:
     else:
         key = 'p_'
     
-    ET_dict = {'ETO2' : [], 'ETCO2' : [], 'ET_exists' : [], 'Cohort' : [], 'ID' : [], 'Date' : [],
-               'O2_shift' : [], 'CO2_shift' : [], 'coeffs' : [], 'r' : [], 'p_value' : [], 'crossing' : []}
+    ET_dict = {'ETO2' : [], 'ETCO2' : [], 'ET_exists' : [], 'ID' : [], 'Date' : [],
+               'O2_shift' : [], 'CO2_shift' : [], 'd_shift' : [], 'O2_f_shift' : [],  'CO2_f_shift' : [], 
+               'O2_r' : [], 'O2_p' : [], 'O2_f_r' : [], 'O2_f_p' : [],
+               'CO2_r' : [], 'CO2_p' : [], 'CO2_f_r' : [], 'CO2_f_p' : [],
+               'comb_r' : [], 'comb_p' : [], 'comb_f_r' : [], 'comb_f_p' : []}
+    
+#    ET_dict = {'ETO2' : [], 'ETCO2' : [], 'ET_exists' : [], 'ID' : [], 'Date' : [],
+#               'O2_shift' : [], 'CO2_shift' : [], 'd_shift' : [],
+#               'O2_r' : [], 'CO2_r' : [], 'O2_p' : [], 'CO2_p' : []}
+#    ET_dict = {'ETO2' : [], 'ETCO2' : [], 'ET_exists' : [], 'ID' : [], 'Date' : [],
+#               'O2_shift' : [], 'CO2_shift' : [], 'coeffs' : [], 'r' : [], 'p_value' : [], 'crossing' : []}
     
     to_drop = []
     
     if verb:
         print('\n\nStart processing each patient')
-    for f_path, vol, cohort, id, date, b_path, p_path, meants_path, tr in zip(p_df.EndTidal_Path, p_df.Volumes, p_df.Cohort, p_df.ID, p_df.Date,
+    for f_path, vol, id, date, b_path, p_path, meants_path, tr in zip(p_df.EndTidal_Path, p_df.Volumes, p_df.ID, p_df.Date,
                                                                               p_df.BOLD_corrected_path, p_df.Processed_path, p_df.meants_path, p_df.eff_TR):
         if not os.path.exists(f_path[:-4]):
             os.mkdir(f_path[:-4])
@@ -347,7 +377,6 @@ for typ in ['four']:
     
         #perfrom cleaning and load into p_df
         #load data into DataFrame
-        ET_dict['Cohort'].append(cohort)
         ET_dict['ID'].append(id)
         ET_dict['Date'].append(date)
         endTidal = pd.read_csv(f_path, sep='\t|,', header=None, usecols=[0, 1, 2], index_col=False, engine='python')
@@ -355,8 +384,13 @@ for typ in ['four']:
                                             1 : 'O2',
                                             2 : 'CO2'})
         #drop rows with missing cols
+        before = len(endTidal)
         endTidal = endTidal.dropna()
-        
+        after = len(endTidal)
+        if before != after:
+                warnings['ID'].append(id + '_' + date)
+                warnings['warning'].append('dropped ' + str(before-after) + ' data points')
+                print('\t\t' + id + '_' + date + ' has a dropped ' + str(before-after) + ' data points')
     
         #skip if DataFrame is empty
         if endTidal.empty:
@@ -364,7 +398,7 @@ for typ in ['four']:
             ET_dict['ETO2'].append('')
             ET_dict['ETCO2'].append('')
             ET_dict['ET_exists'].append(False)
-            print("\tpatient: ", cohort + id + '_' + date, "has empty end-tidal")
+            print("\tpatient: ", id + '_' + date, "has empty end-tidal")
             continue
         
         scan_time = (vol-3) * tr
@@ -381,7 +415,7 @@ for typ in ['four']:
         if(os.path.exists(save_O2) and os.path.exists(save_CO2) and not over):
             save = False
             if(verb):
-                print('\tID: ', cohort + id + '_' + date," \tProcessed gas files already exist")
+                print('\tID: ', id + '_' + date," \tProcessed gas files already exist")
             ET_dict['ETO2'].append(save_O2)
             ET_dict['ETCO2'].append(save_CO2)
             ET_dict['ET_exists'].append(True)
@@ -392,49 +426,59 @@ for typ in ['four']:
         if endTidal.CO2.max() < 1:
             endTidal.CO2 = endTidal.CO2 * 100
         
-#        plt.plot(endTidal.CO2)
-#        plt.show()
         
         if endTidal.Time.max() < 20:
             endTidal.Time = endTidal.Time * 60
         
-        i = 1
+        i = 0
         diff = abs(endTidal.O2.iloc[i+1] - endTidal.O2.iloc[0])
-        while diff < 2:
+        while diff < 0.75:
             i += 1
             diff = abs(endTidal.O2.iloc[i+1] - endTidal.O2.iloc[0])
         
         endTidal = endTidal[i:].reset_index(drop=True)
         
-        i = len(endTidal)-2
-        diff = abs(endTidal.O2.iloc[len(endTidal)-1] - endTidal.O2.iloc[i])
-        while diff < 2:
+        i = len(endTidal)-1
+        diff = abs(endTidal.O2.iloc[len(endTidal)-1] - endTidal.O2.iloc[i-1])
+        while diff < 0.75:
             i -= 1
-            diff = abs(endTidal.O2.iloc[len(endTidal)-1] - endTidal.O2.iloc[i])
+            diff = abs(endTidal.O2.iloc[len(endTidal)-1] - endTidal.O2.iloc[i-1])
         
         endTidal = endTidal[:i].reset_index(drop=True)
+#        
+#        plt.plot(endTidal.CO2)
+#        plt.show()
+            
+#        endTidal.CO2 = signal.detrend(endTidal.CO2)
+#        endTidal.O2 = signal.detrend(endTidal.O2)
+        endTidal.CO2 = endTidal.CO2 - endTidal.CO2.mean()
+        endTidal.O2 = endTidal.O2 - endTidal.O2.mean()
+#                
+#        plt.plot(endTidal.CO2)
+#        plt.show()
         
         meants = signal.detrend(meants)
-#        meants = signal.savgol_filter(meants, 11, 3)
+        meants = signal.savgol_filter(meants, 7, 3)
 #        print(len(meants))
         
-        meants_df = analysis.fft_analysis().fourier_filter(time_pts, meants, 1/60, 10, tr, time_pts, trim=False)
-        meants = meants_df.Data
+#        meants_df = analysis.fft_analysis().fourier_filter(time_pts, meants, 1/60, 10, tr, time_pts, trim=False)
+#        meants = meants_df.Data
 #        print(len(meants))
-        time_pts = meants_df.Time
-            
+#        time_pts = meants_df.Time
+        
+#        save_bold = '/home/ke/Desktop/all_bold/'
+#        meants_df.to_csv(save_bold+id+'_'+date+f_path[-10:-4]+'.txt', index=False, header=False)
+#            
 #        print(len(meants), len(time_pts))
         
 #        endTidal.CO2 = signal.savgol_filter(endTidal.CO2, 35, 3)
-        endTidal.CO2 = signal.detrend(endTidal.CO2)
-        endTidal.O2 = signal.detrend(endTidal.O2)
         
-        smooth = signal.savgol_filter(endTidal.CO2, 35, 3)
-        down = smooth - smooth.std()/2
-
-        
-        zero_crossings = len(np.where(np.diff(np.sign(down)))[0])
-        ET_dict['crossing'].append(zero_crossings)
+#        smooth = signal.savgol_filter(endTidal.CO2, 35, 3)
+#        down = smooth - smooth.std()/2
+#
+#        
+#        zero_crossings = len(np.where(np.diff(np.sign(down)))[0])
+#        ET_dict['crossing'].append(zero_crossings)
         
 #        plt.plot(endTidal.CO2)
 #        plt.show()
@@ -443,30 +487,32 @@ for typ in ['four']:
 
         if four:
             if verb:
-                print('Starting fourier for', cohort + id + '_' + date)
+                print('Starting fourier for', id + '_' + date)
             #get fourier cleaned data
             pre_O2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.O2, 1/60, 25/60, tr, time_pts, trim=True)
 #            pre_O2.Data = signal.savgol_filter(pre_O2.Data, 5, 3)
             pre_CO2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.CO2, 1/60, 25/60, tr, time_pts, trim=True)
+#            sns.lineplot(x='Time', y='Data', data=pre_CO2)
+#            plt.show()
 #            pre_CO2.Data = signal.savgol_filter(pre_CO2.Data, 5, 3)
         elif block:
             if verb:
-                print('Starting block for', cohort + id + '_' + date)
+                print('Starting block for', id + '_' + date)
             pre_O2 = analysis.peak_analysis().block_signal(endTidal.Time, endTidal.O2.apply(lambda x:x*-1), time_pts)*-1
             pre_CO2 = analysis.peak_analysis().block_signal(endTidal.Time, endTidal.CO2, time_pts)
 
         elif trough:
             if verb:
-                print('Starting troughs for', cohort + id + '_' + date)
+                print('Starting troughs for', id + '_' + date)
             pre_CO2, pre_O2 = analysis.peak_analysis().peak_four(endTidal, verb, f_path, tr, time_pts, trough=True)
         
         elif man:
             if verb:
-                print('Starting manual for ', cohort + id + '_' + date)
+                print('Starting manual for ', id + '_' + date)
             pre_CO2, pre_O2 = analysis.peak_analysis().peak(endTidal, verb, f_path, time_pts)
         else:
             if verb:
-                print('Starting peaks for', cohort + id + '_' + date)
+                print('Starting peaks for', id + '_' + date)
             pre_CO2, pre_O2 = analysis.peak_analysis().peak_four(endTidal, verb, f_path, tr, time_pts, trough=False)
 
         # get shifted O2 and CO2
@@ -488,10 +534,34 @@ for typ in ['four']:
 #        plt.show()
 #        exit()
 #        
-        full_O2, processed_O2, O2_corr, O2_shift, O2_start = analysis.shifter().corr_align(meants, pre_O2.Time, pre_O2.Data, scan_time, time_pts)
+        
+        full_O2, processed_O2, O2_corr, O2_shift, O2_start = analysis.shifter().corr_align(meants, pre_O2.Time, pre_O2.Data, scan_time, time_pts, None) # no ref_shift need for O2
+#        raw_O2 = endTidal.drop('CO2', axis=1)
+#        raw_O2 = raw_O2.rename(columns={'O2' : 'Data'})
+#        resamp_time = np.arange(raw_O2.Time.min(), raw_O2.Time.max()+tr, tr)
+#        resamp = interp.interp1d(raw_O2.Time, raw_O2.Data, fill_value='extrapolate')
+#        raw_resamp_O2 = pd.DataFrame({'Time' : resamp_time,
+#                                      'Data' : resamp(resamp_time)})
+#        
+#        full_O2, processed_O2, O2_corr, O2_shift, O2_start = analysis.shifter().raw_align(meants, raw_resamp_O2, pre_O2, scan_time, time_pts, None) # no ref_shift
+        O2_r, O2_p = st.pearsonr(processed_O2, meants)
+        
 #        O2_shift = comb_shift
 #        ET_dict['O2_shift'].append(O2_shift)
-        full_CO2, processed_CO2, CO2_corr, CO2_shift, CO2_start = analysis.shifter().corr_align(meants, pre_CO2.Time, pre_CO2.Data, scan_time, time_pts)
+        
+        full_CO2, processed_CO2, CO2_corr, CO2_shift, CO2_start = analysis.shifter().corr_align(meants, pre_CO2.Time, pre_CO2.Data, scan_time, time_pts, O2_start) # use O2 shift as ref for CO2 shift
+#        raw_CO2 = endTidal.drop('O2', axis=1)
+#        raw_CO2 = raw_CO2.rename(columns={'CO2' : 'Data'})
+#        resamp_time = np.arange(raw_CO2.Time.min(), raw_CO2.Time.max()+tr, tr)
+#        resamp = interp.interp1d(raw_CO2.Time, raw_CO2.Data, fill_value='extrapolate')
+#        raw_resamp_CO2 = pd.DataFrame({'Time' : resamp_time,
+#                                       'Data' : resamp(resamp_time)})
+#        
+#        full_CO2, processed_CO2, CO2_corr, CO2_shift, CO2_start = analysis.shifter().raw_align(meants, raw_resamp_CO2, pre_CO2, scan_time, time_pts, O2_start) # use O2 shift as ref for CO2 shift
+        CO2_r, CO2_p = st.pearsonr(processed_CO2, meants)
+        
+#        sns.lineplot(x='Time', y='Data', data=full_CO2)
+#        plt.show()
 #        CO2_shift = comb_shift
 #        ET_dict['CO2_shift'].append(CO2_shift)
 #        
@@ -500,7 +570,7 @@ for typ in ['four']:
 #        full_O2.to_excel(id+'_'+key+'all_O2.xlsx', index=False)
 #        full_CO2.to_excel(id+'_'+key+'all_CO2.xlsx', index=False)
 #        coeff, r, p_value = analysis.stat_utils().get_info([pre_O2.Data, pre_CO2.Data], meants)
-        coeff, r, p_value = analysis.stat_utils().get_info([processed_O2, processed_CO2], meants)
+        coeff, comb_r, comb_p = analysis.stat_utils().get_info([processed_O2, processed_CO2], meants)
         
 #        combined = coeff[0] * pre_O2.Data + coeff[1] * pre_CO2.Data + coeff[2]
 #        full_comb, processed_comb, comb_corr, comb_shift, comb_start = analysis.shifter().corr_align(meants, pre_CO2.Time, combined, scan_time, time_pts)
@@ -508,16 +578,19 @@ for typ in ['four']:
 #        CO2_shift = comb_shift
         combined = coeff[0] * processed_O2 + coeff[1] * processed_CO2 + coeff[2]
         full_comb, processed_comb, comb_corr, comb_shift, comb_start = analysis.shifter().corr_align(meants, time_pts, combined, scan_time, time_pts)
-        O2_shift += comb_shift
-        CO2_shift += comb_shift
+        O2_f_shift = O2_shift + comb_shift
+        CO2_f_shift = CO2_shift + comb_shift
 #        
 #        processed_O2_f = analysis.stat_utils().resamp(pre_O2.Time + O2_shift, time_pts, pre_O2.Data, O2_shift, comb_start)
 #        processed_CO2_f = analysis.stat_utils().resamp(pre_CO2.Time + CO2_shift, time_pts, pre_CO2.Data, CO2_shift, comb_start)
+#        
+        processed_O2_f = analysis.stat_utils().resamp(pre_O2.Time + O2_f_shift, time_pts, pre_O2.Data, O2_f_shift, O2_start+comb_start)
+        O2_f_r, O2_f_p = st.pearsonr(processed_O2_f, meants)
+        processed_CO2_f = analysis.stat_utils().resamp(pre_CO2.Time + CO2_f_shift, time_pts, pre_CO2.Data, CO2_f_shift, CO2_start+comb_start)
+        CO2_f_r, CO2_f_p = st.pearsonr(processed_CO2_f, meants)
         
-        processed_O2_f = analysis.stat_utils().resamp(pre_O2.Time + O2_shift, time_pts, pre_O2.Data, O2_shift, O2_start+comb_start)
-        processed_CO2_f = analysis.stat_utils().resamp(pre_CO2.Time + CO2_shift, time_pts, pre_CO2.Data, CO2_shift, CO2_start+comb_start)
-        
-        coeff_f, r, p_value = analysis.stat_utils().get_info([processed_O2_f, processed_CO2_f], meants)
+#        
+        coeff_f, comb_f_r, comb_f_p = analysis.stat_utils().get_info([processed_O2_f, processed_CO2_f], meants)
         
 #        trim_O2 = pre_O2.Data[:len(meants)]
 #        tirm_CO2 = pre_CO2.Data[:len(meants)]
@@ -560,13 +633,31 @@ for typ in ['four']:
 
         ET_dict['O2_shift'].append(O2_shift)
         ET_dict['CO2_shift'].append(CO2_shift)
+        ET_dict['d_shift'].append(CO2_shift-O2_shift)
+        ET_dict['O2_f_shift'].append(O2_f_shift)
+        ET_dict['CO2_f_shift'].append(CO2_f_shift)
         
 #        r, p_value = st.pearsonr(coeff[0] * processed_O2 + coeff[1] * processed_CO2 + coeff[2], meants)
         
 #        ET_dict['coeffs'].append(coeff)
-        ET_dict['coeffs'].append(coeff_f)
-        ET_dict['r'].append(r)
-        ET_dict['p_value'].append(p_value)
+#        ET_dict['coeffs'].append(coeff_f)
+#        ET_dict['r'].append(r)
+#        ET_dict['p_value'].append(p_value)
+        ET_dict['O2_r'].append(O2_r)
+        ET_dict['CO2_r'].append(CO2_r)
+        ET_dict['comb_r'].append(comb_r)
+        
+        ET_dict['O2_p'].append(O2_p)
+        ET_dict['CO2_p'].append(CO2_p)
+        ET_dict['comb_p'].append(comb_p)
+        
+        ET_dict['O2_f_r'].append(O2_f_r)
+        ET_dict['CO2_f_r'].append(CO2_f_r)
+        ET_dict['comb_f_r'].append(comb_f_r)
+        
+        ET_dict['O2_f_p'].append(O2_f_p)
+        ET_dict['CO2_f_p'].append(CO2_f_p)
+        ET_dict['comb_f_p'].append(comb_f_p)
         
         
         if save:
@@ -582,10 +673,10 @@ for typ in ['four']:
 #            processed_CO2 = signal.savgol_filter(processed_CO2, 11, 3)
             
             #save data
-#            np.savetxt(save_O2, processed_O2, delimiter='\t')
-#            np.savetxt(save_CO2, processed_CO2, delimiter='\t')
-            np.savetxt(save_O2, processed_O2_f, delimiter='\t')
-            np.savetxt(save_CO2, processed_CO2_f, delimiter='\t')
+            np.savetxt(save_O2, processed_O2, delimiter='\t')
+            np.savetxt(save_CO2, processed_CO2, delimiter='\t')
+#            np.savetxt(save_O2, processed_O2_f, delimiter='\t')
+#            np.savetxt(save_CO2, processed_CO2_f, delimiter='\t')
 #            np.savetxt(save_O2, process_O2_f, delimiter='\t')
 #            np.savetxt(save_CO2, process_CO2_f, delimiter='\t')
     
@@ -601,12 +692,20 @@ for typ in ['four']:
 #                                                  CO2_time=pre_CO2.Time, CO2=pre_CO2.Data, CO2_shift=process_CO2, CO2_shift_f=process_CO2_f,
 #                                                  coeff=coeff, coeff_f=coeff_f,
 #                                                  meants=meants, f_path=f_path, key=key, verb=verb, time_points=time_pts, TR=tr)
-            analysis.stat_utils().save_plots(df=endTidal, O2_time=pre_O2.Time, O2=pre_O2.Data, O2_shift=processed_O2, O2_correlation=O2_corr, O2_shift_f=processed_O2_f,
-                                             CO2_time=pre_CO2.Time, CO2=pre_CO2.Data, CO2_shift=processed_CO2, CO2_correlation=CO2_corr, CO2_shift_f=processed_CO2_f, meants=meants,
-                                             coeff=coeff, coeff_f=coeff_f, comb_corr=comb_corr,
-                                             f_path=f_path, key=key, verb=verb, time_points=time_pts, TR=tr)
-            # analysis.stat_utils().save_plots(df=endTidal, O2=pre_O2, O2_shift=processed_O2, CO2=pre_CO2, CO2_shift=processed_CO2, meants=meants, f_path=graphs_dir+id, key=key, verb=verb, TR=interp_time)
-
+#            analysis.stat_utils().save_plots(df=endTidal, O2_time=pre_O2.Time, O2=pre_O2.Data, O2_shift=processed_O2, O2_correlation=O2_corr, O2_shift_f=processed_O2_f,
+#                                             CO2_time=pre_CO2.Time, CO2=pre_CO2.Data, CO2_shift=processed_CO2, CO2_correlation=CO2_corr, CO2_shift_f=processed_CO2_f, meants=meants,
+#                                             coeff=coeff, coeff_f=coeff_f, comb_corr=comb_corr,
+#                                             f_path=f_path, key=key, verb=verb, time_points=time_pts, TR=tr)
+            analysis.stat_utils().save_plots_comb(df=endTidal, O2=pre_O2, O2_m=full_O2, O2_f=processed_O2_f, O2_corr=O2_corr,
+                                                  CO2=pre_CO2, CO2_m=full_CO2, CO2_f=processed_CO2_f, CO2_corr=CO2_corr, meants=meants,
+                                                  coeff=coeff, coeff_f=coeff_f, comb_corr=comb_corr,
+                                                  f_path=f_path, key=key, verb=verb, time_points=time_pts)
+#            analysis.stat_utils().save_plots_no_comb(df=endTidal, O2=pre_O2, O2_f=full_O2, O2_corr=O2_corr,
+#                                                     CO2=pre_CO2, CO2_f=full_CO2, CO2_corr=CO2_corr, meants=meants,
+#                                                     f_path=f_path, key=key, verb=verb, time_points=time_pts)
+#            analysis.stat_utils().save_plots_no_comb_raw(df=endTidal, O2=raw_resamp_O2, pre_O2=pre_O2, O2_f=full_O2, O2_corr=O2_corr,
+#                                                     CO2=raw_resamp_CO2, pre_CO2=pre_CO2, CO2_f=full_CO2, CO2_corr=CO2_corr, meants=meants,
+#                                                     f_path=f_path, key=key, verb=verb, time_points=time_pts)
     
     if verb:
         print()
@@ -621,7 +720,7 @@ for typ in ['four']:
     et_frame = pd.DataFrame(ET_dict)
     
     #merge and drop bad entries
-    df = p_df.merge(et_frame, on=['Cohort', 'ID', 'Date'], how='outer')
+    df = p_df.merge(et_frame, on=['ID', 'Date'], how='outer')
     df = df[df.ET_exists != False].drop('ET_exists', axis = 1)
     
     #reset indeces
@@ -644,11 +743,11 @@ for typ in ['four']:
 #    with open(feat_dir+'design_files/template', 'r') as template:
 #        stringTemp = template.read()
 #        for i in range(len(df)):
-#            output_dir = feat_dir+key+df.Cohort[i]+df.ID[i]+'_'+df.Date[i]
-##            output_dir = '/media/ke/8tb_part2/FSL_work/feat/both_shift/'+key+df.Cohort[i]+df.ID[i]+'_'+df.Date[i]
+#            output_dir = feat_dir+key+df.ID[i]+'_'+df.Date[i]
+##            output_dir = '/media/ke/8tb_part2/FSL_work/feat/both_shift/'+key+df.ID[i]+'_'+df.Date[i]
 #            if os.path.exists(output_dir+'.feat'):
 #                if verb:
-#                    print('FEAT already exists for', key+df.Cohort[i]+df.ID[i]+'_'+df.Date[i])
+#                    print('FEAT already exists for', key+df.ID[i]+'_'+df.Date[i])
 #                if over:
 #                    if verb:
 #                        print('Overwriting')
@@ -665,7 +764,7 @@ for typ in ['four']:
 #            to_write = to_write.replace("%%O2_CONTRAST%%",'"'+df.ETO2[i]+'"')
 #            to_write = to_write.replace("%%CO2_CONTRAST%%",'"'+df.ETCO2[i]+'"')
 #    
-#            ds_path = feat_dir+'design_files/'+key+df.Cohort[i]+df.ID[i]+'_'+df.Date[i]+'.fsf'
+#            ds_path = feat_dir+'design_files/'+key+df.ID[i]+'_'+df.Date[i]+'.fsf'
 #            with open(ds_path, 'w+') as outFile:
 #                outFile.write(to_write)
 #                        
@@ -680,7 +779,7 @@ for typ in ['four']:
 #        
 #    # run featquery
 #    for i in range(len(df)):
-#        p_id = key+df.Cohort[i]+df.ID[i]+'_'+df.Date[i]
+#        p_id = key+df.ID[i]+'_'+df.Date[i]
 #        feat_output_dir = feat_dir+p_id+'.feat/'
 ##        feat_output_dir = '/media/ke/8tb_part2/FSL_work/feat/both_shift/'+p_id+'.feat/'
 #        
@@ -722,8 +821,8 @@ for typ in ['four']:
     for i in range(len(df)):        
         add = True
         
-#        output_dir = feat_dir+key+df.Cohort[i]+df.ID[i]+'_'+df.Date[i]
-##        output_dir = '/media/ke/8tb_part2/FSL_work/feat/both_shift/'+key+df.Cohort[i]+df.ID[i]+'_'+df.Date[i]
+#        output_dir = feat_dir+key+df.ID[i]+'_'+df.Date[i]
+##        output_dir = '/media/ke/8tb_part2/FSL_work/feat/both_shift/'+key+df.ID[i]+'_'+df.Date[i]
 #        feat_output_dir = output_dir+'.feat/'
 #        
 #        try:
@@ -734,7 +833,7 @@ for typ in ['four']:
 #                cz1.iloc[j] = cz1.iloc[j] * cz1.iloc[j].Voxels/t_vol
 #            
 #
-#            z1 = { 'ID' : [df.Cohort[i]+df.ID[i]+'_'+df.Date[i]],
+#            z1 = { 'ID' : [df.ID[i]+'_'+df.Date[i]],
 #                   'type' : [key],
 #                   'Voxels': [t_vol],
 #                   '-log10(p)' : [cz1['-log10(P)'].sum()],
@@ -742,7 +841,7 @@ for typ in ['four']:
 #            cz1_final = pd.DataFrame(z1)
 #        
 #        except FileNotFoundError:
-#            warnings['ID'].append(df.Cohort[i] + df.ID[i] + '_' + df.Date[i])
+#            warnings['ID'].append(df.ID[i] + '_' + df.Date[i])
 #            warnings['warning'].append('No cluster_zstat1.txt')
 #            add = False
 #            if verb:
@@ -756,7 +855,7 @@ for typ in ['four']:
 #                cz2.iloc[j] = cz2.iloc[j] * cz2.iloc[j].Voxels/t_vol
 #            
 #
-#            z2 = { 'ID' : [df.Cohort[i]+df.ID[i]+'_'+df.Date[i]],
+#            z2 = { 'ID' : [df.ID[i]+'_'+df.Date[i]],
 #                   'type' : [key],
 #                   'Voxels': [t_vol],
 #                   '-log10(p)' : [cz2['-log10(P)'].sum()],
@@ -764,7 +863,7 @@ for typ in ['four']:
 #            cz2_final = pd.DataFrame(z2)
 #        
 #        except FileNotFoundError:
-#            warnings['ID'].append(df.Cohort[i] + df.ID[i] + '_' + df.Date[i])
+#            warnings['ID'].append(df.ID[i] + '_' + df.Date[i])
 #            warnings['warning'].append('No cluster_zstat2.txt')
 #            add = False
 #            if verb:
@@ -779,12 +878,12 @@ for typ in ['four']:
 #        try:
 #            fq1 = pd.read_csv(O2+'report.txt', sep='\t| ', header=None, usecols=[5], engine='python')
 #            fq1 = fq1.rename(columns={5 : 'fq_mean'})
-#            fq1['ID'] = df.Cohort[i]+df.ID[i]+'_'+df.Date[i]
+#            fq1['ID'] = df.ID[i]+'_'+df.Date[i]
 #            fq1['type'] = key
 #            fq1 = fq1[['ID', 'type', 'fq_mean']]
 #            build = build.merge(fq1, on=['ID', 'type'], suffixes=('_O2', '_CO2'))
 #        except FileNotFoundError:
-#            warnings['ID'].append(df.Cohort[i] + df.ID[i] + '_' + df.Date[i])
+#            warnings['ID'].append(df.ID[i] + '_' + df.Date[i])
 #            warnings['warning'].append('No O2 activation found')
 #            add = False
 #            if verb:
@@ -795,12 +894,12 @@ for typ in ['four']:
 #        try:
 #            fq2 = pd.read_csv(CO2+'report.txt', sep='\t| ', header=None, usecols=[5], engine='python')
 #            fq2 = fq2.rename(columns={5 : 'fq_mean'})
-#            fq2['ID'] = df.Cohort[i]+df.ID[i]+'_'+df.Date[i]
+#            fq2['ID'] = df.ID[i]+'_'+df.Date[i]
 #            fq2['type'] = key
 #            fq2 = fq2[['ID', 'type', 'fq_mean']]
 #            build = build.merge(fq2, on=['ID', 'type'], suffixes=('_O2', '_CO2'))
 #        except FileNotFoundError:
-#            warnings['ID'].append(df.Cohort[i] + df.ID[i] + '_' + df.Date[i])
+#            warnings['ID'].append(df.ID[i] + '_' + df.Date[i])
 #            warnings['warning'].append('No CO2 activation found')
 #            add = False
 #            if verb:
@@ -812,15 +911,31 @@ for typ in ['four']:
 #        build['CO2_coeff'] = df.coeffs[i][1]
 #        build['r'] = df.r[i]
 #        build['p_value'] = df.p_value[i]
-        
-        build = pd.DataFrame({'ID' : [df.Cohort[i]+df.ID[i]+'_'+df.Date[i]],
-                              'Cross' : [df.crossing[i]],
+
+
+# Categories based on previous declarations
+#ET_dict = {'ETO2' : [], 'ETCO2' : [], 'ET_exists' : [], 'ID' : [], 'Date' : [],
+#           'O2_shift' : [], 'CO2_shift' : [], 'd_shift' : [],
+#           'O2_r' : [], 'CO2_r' : [], 'O2_p' : [], 'CO2_p' : []}
+
+        build = pd.DataFrame({'ID' : [df.ID[i]+'_'+df.Date[i]],
                               'O2_shift' : [df.O2_shift[i]],
                               'CO2_shift' : [df.CO2_shift[i]],
-                              'O2_coeff' : [df.coeffs[i][0]],
-                              'CO2_coeff' : [df.coeffs[i][1]],
-                              'r' : [df.r[i]],
-                              'p_value' : [df.p_value[i]]})
+                              'd_shift' : [df.d_shift[i]],
+                              'O2_f_shift' : [df.O2_f_shift[i]],
+                              'CO2_f_shift' : [df.CO2_f_shift[i]],
+                              'O2_r' : [df.O2_r[i]],
+                              'CO2_r' : [df.CO2_r[i]],
+                              'comb_r' : [df.comb_r[i]],
+                              'O2_p' : [df.O2_p[i]],
+                              'CO2_p' : [df.CO2_p[i]],
+                              'comb_p' : [df.comb_p[i]],
+                              'O2_f_r' : [df.O2_f_r[i]],
+                              'CO2_f_r' : [df.CO2_f_r[i]],
+                              'comb_f_r' : [df.comb_f_r[i]],
+                              'O2_f_p' : [df.O2_f_p[i]],
+                              'CO2_f_p' : [df.CO2_f_p[i]],
+                              'comb_f_p' : [df.comb_f_p[i]]})
         
         if add:
             stats_df = pd.concat([stats_df, build])
@@ -836,6 +951,13 @@ stats_df = stats_df.sort_values('ID')
 with pd.ExcelWriter(path+'stats_data_comb.xlsx') as writer:  # doctest: +SKIP
     stats_df.to_excel(writer, sheet_name='Stats', index=False)
     warnings_df.to_excel(writer, sheet_name='Warnings', index=False)
+
+sns.scatterplot(x='O2_f_shift', y='CO2_f_shift', data=stats_df)
+plt.savefig(path+'shift_comp.png')
+plt.close()
+sns.distplot(stats_df.d_shift)
+plt.savefig(path+'d_shift_dist.png')
+plt.close()
 
 if verb:
     print('============== Script Finished ==============')

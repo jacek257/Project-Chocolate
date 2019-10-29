@@ -121,7 +121,8 @@ class fft_analysis:
 
 class stat_utils:
     """docstring for stat_utils."""
-    
+
+
     def save_plots_comb_only(self, df, O2, O2_f, 
                    CO2, CO2_f, meants,
                    coeff, coeff_f, comb_corr,
@@ -304,8 +305,396 @@ class stat_utils:
         plt.close(fig=f)
         
         return       
-        
     
+    def save_plots_no_comb(self, df, O2, O2_f, O2_corr,
+                           CO2, CO2_f, CO2_corr, meants,
+                           f_path, key, verb, time_points):
+        
+        if verb:
+            print('Creating O2 plots')
+        
+        # set the size of the graphs
+        sns.set(rc={'figure.figsize':(30,20)})
+        plt.rc('legend', fontsize='medium')
+        plt.rc('xtick', labelsize='medium')
+        plt.rc('ytick', labelsize='x-small')
+        plt.rc('axes', titlesize='medium')
+
+        meants_norm = meants / meants.std()
+        O2_norm = O2.Data / O2.Data.std()
+        O2_f_norm = O2_f.Data / O2.Data.std()
+        
+        f, axes = plt.subplots(2, 2)
+        
+        sns.lineplot(x='Time', y='O2', data=df, color='b', ax=axes[0, 0])
+        sns.lineplot(x='Time', y='Data', data=O2, color='g', ax=axes[0, 0])
+        axes[0, 0].set_title('Raw O2 vs Processed O2')
+        axes[0, 0].legend(['Raw O2', 'Processed O2'], facecolor='w')
+
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0, 1])
+        sns.lineplot(x='Time', y=O2_norm, data=O2, color='g', ax=axes[0, 1])
+        axes[0, 1].set_title('Processed O2 vs BOLD')
+        axes[0, 1].legend(['BOLD', 'Processed O2'], facecolor='w')
+        
+        sns.lineplot(x=np.arange(-len(O2_corr)//2, len(O2_corr)//2)+1, y=O2_corr, ax=axes[1, 0])
+        axes[1, 0].set_title('Cross-Correlation')
+        axes[1, 0].legend(['Cross-Correlation'], facecolor='w')
+
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1, 1])
+        sns.lineplot(x='Time', y=O2_f_norm, data=O2_f, color='g', ax=axes[1, 1])
+        axes[1, 1].set_title('Shifted O2 vs BOLD')
+        axes[1, 1].legend(['BOLD', 'Shifted O2'], facecolor='w')
+
+        if verb:
+            print('Saving O2 plot for', f_path)
+
+        save_path = save_path = f_path[:-4]+'/' + key + 'O2.png'
+        plt.savefig(save_path)
+        if verb:
+            print('Saving complete')
+#        plt.show()
+        f.clf()
+        plt.close(fig=f)
+        
+        if verb:
+            print('Creating CO2 plots')
+            
+        f, axes = plt.subplots(2, 2)
+        
+        CO2_norm = CO2.Data / CO2.Data.std()
+        CO2_f_norm = CO2_f.Data / CO2.Data.std()
+        
+        sns.lineplot(x='Time', y='CO2', data=df, color='b', ax=axes[0, 0])
+        sns.lineplot(x='Time', y='Data', data=CO2, color='r', ax=axes[0, 0])
+        axes[0, 0].set_title('Raw CO2 vs Processed CO2')
+        axes[0, 0].legend(['Raw O2', 'Processed O2'], facecolor='w')
+
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0, 1])
+        sns.lineplot(x='Time', y=CO2_norm, data=CO2, color='r', ax=axes[0, 1])
+        axes[0, 1].set_title('Processed CO2 vs BOLD')
+        axes[0, 1].legend(['BOLD', 'Processed CO2'], facecolor='w')
+        
+        sns.lineplot(x=np.arange(-len(CO2_corr)//2, len(CO2_corr)//2)+1, y=CO2_corr, ax=axes[1, 0])
+        axes[1, 0].set_title('Cross-Correlation')
+        axes[1, 0].legend(['Cross-Correlation'], facecolor='w')
+
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1, 1])
+        sns.lineplot(x='Time', y=CO2_f_norm, data=CO2_f, color='r', ax=axes[1, 1])
+        axes[1, 1].set_title('BOLD vs Shifted CO2')
+        axes[1, 1].legend(['BOLD', 'Shifted CO2'], facecolor='w')
+
+        if verb:
+            print('Saving CO2 plot for', f_path)
+
+        save_path = save_path = f_path[:-4]+'/' + key + 'CO2.png'
+        plt.savefig(save_path)
+        if verb:
+            print('Saving complete')
+#        plt.show()
+        f.clf()
+        plt.close(fig=f)
+        
+        if verb:
+            print('Creating stacked plot')
+        
+        f, axes = plt.subplots(2, 1)
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0])
+        sns.lineplot(x='Time', y=O2_norm, data=O2, color='g', ax=axes[0])
+        sns.lineplot(x='Time', y=CO2_norm, data=CO2, color='r', ax=axes[0])
+        axes[0].set_title('Processed Gases vs BOLD')
+        axes[0].legend(['BOLD','Processed O2', 'Processed CO2'], facecolor='w')
+        
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1])
+        sns.lineplot(x='Time', y=O2_f_norm, data=O2, color='g', ax=axes[1])
+        sns.lineplot(x='Time', y=CO2_f_norm, data=CO2, color='r', ax=axes[1])
+        axes[1].set_title('Shifted Gases vs BOLD')
+        axes[1].legend(['BOLD','Shifted O2', 'Shifted CO2'], facecolor='w')
+
+        if verb:
+            print('Saving stacked plot for', f_path)
+
+        save_path = save_path = f_path[:-4]+'/' + key + 'stacked.png'
+        plt.savefig(save_path)
+        if verb:
+            print('Saving complete')
+#        plt.show()
+        f.clf()
+        plt.close(fig=f)
+        
+        return    
+    
+    def save_plots_comb(self, df, O2, O2_m, O2_f, O2_corr,
+                        CO2, CO2_m, CO2_f, CO2_corr, meants,
+                        coeff, coeff_f, comb_corr,
+                        f_path, key, verb, time_points):
+        
+        if verb:
+            print('Creating O2 plots')
+        
+        # set the size of the graphs
+        sns.set(rc={'figure.figsize':(30,20)})
+        plt.rc('legend', fontsize='medium')
+        plt.rc('xtick', labelsize='medium')
+        plt.rc('ytick', labelsize='x-small')
+        plt.rc('axes', titlesize='medium')
+
+        meants_norm = meants / meants.std()
+        O2_norm = O2.Data / O2.Data.std()
+        O2_m_norm = O2_m.Data / O2_m.Data.std()
+        
+        f, axes = plt.subplots(2, 2)
+        
+        sns.lineplot(x='Time', y='O2', data=df, color='b', ax=axes[0, 0])
+        sns.lineplot(x='Time', y='Data', data=O2, color='g', ax=axes[0, 0])
+        axes[0, 0].set_title('Raw O2 vs Processed O2')
+        axes[0, 0].legend(['Raw O2', 'Processed O2'], facecolor='w')
+
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0, 1])
+        sns.lineplot(x='Time', y=O2_norm, data=O2, color='g', ax=axes[0, 1])
+        axes[0, 1].set_title('Processed O2 vs BOLD')
+        axes[0, 1].legend(['BOLD', 'Processed O2'], facecolor='w')
+        
+        sns.lineplot(x=np.arange(-len(O2_corr)//2, len(O2_corr)//2)+1, y=O2_corr, ax=axes[1, 0])
+        axes[1, 0].set_title('Cross-Correlation')
+        axes[1, 0].legend(['Cross-Correlation'], facecolor='w')
+
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1, 1])
+        sns.lineplot(x='Time', y=O2_m_norm, data=O2_m, color='g', ax=axes[1, 1])
+        axes[1, 1].set_title('Shifted O2 vs BOLD')
+        axes[1, 1].legend(['BOLD', 'Shifted O2'], facecolor='w')
+
+        if verb:
+            print('Saving O2 plot for', f_path)
+
+        save_path = save_path = f_path[:-4]+'/' + key + 'O2.png'
+        plt.savefig(save_path)
+        if verb:
+            print('Saving complete')
+#        plt.show()
+        f.clf()
+        plt.close(fig=f)
+        
+        if verb:
+            print('Creating CO2 plots')
+            
+        f, axes = plt.subplots(2, 2)
+        
+        CO2_norm = CO2.Data / CO2.Data.std()
+        CO2_m_norm = CO2_m.Data / CO2_m.Data.std()
+        
+        sns.lineplot(x='Time', y='CO2', data=df, color='b', ax=axes[0, 0])
+        sns.lineplot(x='Time', y='Data', data=CO2, color='r', ax=axes[0, 0])
+        axes[0, 0].set_title('Raw CO2 vs Processed CO2')
+        axes[0, 0].legend(['Raw O2', 'Processed O2'], facecolor='w')
+
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0, 1])
+        sns.lineplot(x='Time', y=CO2_norm, data=CO2, color='r', ax=axes[0, 1])
+        axes[0, 1].set_title('Processed CO2 vs BOLD')
+        axes[0, 1].legend(['BOLD', 'Processed CO2'], facecolor='w')
+        
+        sns.lineplot(x=np.arange(-len(CO2_corr)//2, len(CO2_corr)//2)+1, y=CO2_corr, ax=axes[1, 0])
+        axes[1, 0].set_title('Cross-Correlation')
+        axes[1, 0].legend(['Cross-Correlation'], facecolor='w')
+
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1, 1])
+        sns.lineplot(x='Time', y=CO2_m_norm, data=CO2_m, color='r', ax=axes[1, 1])
+        axes[1, 1].set_title('BOLD vs Shifted CO2')
+        axes[1, 1].legend(['BOLD', 'Shifted CO2'], facecolor='w')
+
+        if verb:
+            print('Saving CO2 plot for', f_path)
+
+        save_path = save_path = f_path[:-4]+'/' + key + 'CO2.png'
+        plt.savefig(save_path)
+        if verb:
+            print('Saving complete')
+#        plt.show()
+        f.clf()
+        plt.close(fig=f)
+        
+        if verb:
+            print('Creating combined plots')
+            
+        f, axes = plt.subplots(3, 1)
+        
+        O2_f_norm = O2_f / O2_f.std()
+        CO2_f_norm = CO2_f / CO2_f.std()
+        combined = coeff[0] * O2_m_norm + coeff[1] * CO2_m_norm + coeff[2]
+        
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0])
+        sns.lineplot(x='Time', y=combined, data=CO2, color='black', ax=axes[0])
+        axes[0].set_title('BOLD vs Combination')
+        axes[0].legend(['BOLD', 'Combination'], facecolor='w')
+        
+        sns.lineplot(x=np.arange(-len(comb_corr)//2, len(comb_corr)//2)+1, y=comb_corr, ax=axes[1])
+        axes[1].set_title('Cross-Correlation')
+        axes[1].legend(['Cross-Correlation'], facecolor='w')
+
+        combined_s = coeff_f[0] * O2_f_norm + coeff_f[1] * CO2_f_norm + coeff_f[2]
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[2])
+        sns.lineplot(x=time_points, y=combined_s, color='black', ax=axes[2])
+        axes[2].set_title('BOLD vs Shifted Combination')
+        axes[2].legend(['BOLD', 'Shifted Combination'], facecolor='w')
+
+        if verb:
+            print('Saving combined plot for', f_path)
+
+        save_path = save_path = f_path[:-4]+'/' + key + 'combined.png'
+        plt.savefig(save_path)
+        if verb:
+            print('Saving complete')
+#        plt.show()
+        f.clf()
+        plt.close(fig=f)
+        
+        if verb:
+            print('Creating stacked plot')
+        
+        f, axes = plt.subplots(2, 1)
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0])
+        sns.lineplot(x='Time', y=O2_m_norm, data=O2_m, color='g', ax=axes[0])
+        sns.lineplot(x='Time', y=CO2_m_norm, data=CO2_m, color='r', ax=axes[0])
+        sns.lineplot(x=time_points, y=combined, color='black', ax=axes[0])
+        axes[0].set_title('Processed Gases vs BOLD')
+        axes[0].legend(['BOLD','Processed O2', 'Processed CO2', 'Combination'], facecolor='w')
+        
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1])
+        sns.lineplot(x=time_points, y=O2_f_norm, color='g', ax=axes[1])
+        sns.lineplot(x=time_points, y=CO2_f_norm, color='r', ax=axes[1])
+        sns.lineplot(x=time_points, y=combined_s, color='black', ax=axes[1])
+        axes[1].set_title('Shifted Gases vs BOLD')
+        axes[1].legend(['BOLD','Shifted O2', 'Shifted CO2', 'Shifted Combination'], facecolor='w')
+
+        if verb:
+            print('Saving stacked plot for', f_path)
+
+        save_path = save_path = f_path[:-4]+'/' + key + 'stacked.png'
+        plt.savefig(save_path)
+        if verb:
+            print('Saving complete')
+#        plt.show()
+        f.clf()
+        plt.close(fig=f)
+        
+        return    
+    
+    def save_plots_no_comb_raw(self, df, O2, pre_O2, O2_f, O2_corr,
+                           CO2, CO2_f, pre_CO2, CO2_corr, meants,
+                           f_path, key, verb, time_points):
+        
+        if verb:
+            print('Creating O2 plots')
+        
+        # set the size of the graphs
+        sns.set(rc={'figure.figsize':(30,20)})
+        plt.rc('legend', fontsize='medium')
+        plt.rc('xtick', labelsize='medium')
+        plt.rc('ytick', labelsize='x-small')
+        plt.rc('axes', titlesize='medium')
+
+        meants_norm = meants / meants.std()
+        O2_norm = O2.Data / O2.Data.std()
+        O2_f_norm = O2_f.Data / O2.Data.std()
+        
+        f, axes = plt.subplots(2, 2)
+        
+        sns.lineplot(x='Time', y='O2', data=df, color='b', ax=axes[0, 0])
+        sns.lineplot(x='Time', y='Data', data=pre_O2, color='g', ax=axes[0, 0])
+        axes[0, 0].set_title('Raw O2 vs Processed O2')
+        axes[0, 0].legend(['Raw O2', 'Processed O2'], facecolor='w')
+
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0, 1])
+        sns.lineplot(x='Time', y=O2_norm, data=O2, color='g', ax=axes[0, 1])
+        axes[0, 1].set_title('Raw O2 vs BOLD')
+        axes[0, 1].legend(['BOLD', 'Raw O2'], facecolor='w')
+        
+        sns.lineplot(x=np.arange(-len(O2_corr)//2, len(O2_corr)//2)+1, y=O2_corr, ax=axes[1, 0])
+        axes[1, 0].set_title('Cross-Correlation')
+        axes[1, 0].legend(['Cross-Correlation'], facecolor='w')
+
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1, 1])
+        sns.lineplot(x='Time', y=O2_f_norm, data=O2_f, color='g', ax=axes[1, 1])
+        axes[1, 1].set_title('Shifted O2 vs BOLD')
+        axes[1, 1].legend(['BOLD', 'Shifted O2'], facecolor='w')
+
+        if verb:
+            print('Saving O2 plot for', f_path)
+
+        save_path = save_path = f_path[:-4]+'/' + key + 'O2.png'
+        plt.savefig(save_path)
+        if verb:
+            print('Saving complete')
+#        plt.show()
+        f.clf()
+        plt.close(fig=f)
+        
+        if verb:
+            print('Creating CO2 plots')
+            
+        f, axes = plt.subplots(2, 2)
+        
+        CO2_norm = CO2.Data / CO2.Data.std()
+        CO2_f_norm = CO2_f.Data / CO2.Data.std()
+        
+        sns.lineplot(x='Time', y='CO2', data=df, color='b', ax=axes[0, 0])
+        sns.lineplot(x='Time', y='Data', data=pre_CO2, color='r', ax=axes[0, 0])
+        axes[0, 0].set_title('Raw CO2 vs Processed CO2')
+        axes[0, 0].legend(['Raw O2', 'Processed O2'], facecolor='w')
+
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0, 1])
+        sns.lineplot(x='Time', y=CO2_norm, data=CO2, color='r', ax=axes[0, 1])
+        axes[0, 1].set_title('Raw CO2 vs BOLD')
+        axes[0, 1].legend(['BOLD', 'Raw CO2'], facecolor='w')
+        
+        sns.lineplot(x=np.arange(-len(CO2_corr)//2, len(CO2_corr)//2)+1, y=CO2_corr, ax=axes[1, 0])
+        axes[1, 0].set_title('Cross-Correlation')
+        axes[1, 0].legend(['Cross-Correlation'], facecolor='w')
+
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1, 1])
+        sns.lineplot(x='Time', y=CO2_f_norm, data=CO2_f, color='r', ax=axes[1, 1])
+        axes[1, 1].set_title('BOLD vs Shifted CO2')
+        axes[1, 1].legend(['BOLD', 'Shifted CO2'], facecolor='w')
+
+        if verb:
+            print('Saving CO2 plot for', f_path)
+
+        save_path = save_path = f_path[:-4]+'/' + key + 'CO2.png'
+        plt.savefig(save_path)
+        if verb:
+            print('Saving complete')
+#        plt.show()
+        f.clf()
+        plt.close(fig=f)
+        
+        if verb:
+            print('Creating stacked plot')
+        
+        f, axes = plt.subplots(2, 1)
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0])
+        sns.lineplot(x='Time', y=O2_norm, data=O2, color='g', ax=axes[0])
+        sns.lineplot(x='Time', y=CO2_norm, data=CO2, color='r', ax=axes[0])
+        axes[0].set_title('Processed Gases vs BOLD')
+        axes[0].legend(['BOLD','Processed O2', 'Processed CO2'], facecolor='w')
+        
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1])
+        sns.lineplot(x='Time', y=O2_f_norm, data=O2, color='g', ax=axes[1])
+        sns.lineplot(x='Time', y=CO2_f_norm, data=CO2, color='r', ax=axes[1])
+        axes[1].set_title('Shifted Gases vs BOLD')
+        axes[1].legend(['BOLD','Shifted O2', 'Shifted CO2'], facecolor='w')
+
+        if verb:
+            print('Saving stacked plot for', f_path)
+
+        save_path = save_path = f_path[:-4]+'/' + key + 'stacked.png'
+        plt.savefig(save_path)
+        if verb:
+            print('Saving complete')
+#        plt.show()
+        f.clf()
+        plt.close(fig=f)
+        
+        return    
+        
     def save_plots(self, df, O2_time, O2, O2_shift, O2_correlation, O2_shift_f,
                    CO2_time, CO2, CO2_shift, CO2_correlation, CO2_shift_f, meants,
                    coeff, coeff_f, comb_corr,
@@ -385,13 +774,13 @@ class stat_utils:
 
         sns.lineplot(x='Time', y='O2', data=df, linewidth=1, color='b', ax=axes[0, 0])
         sns.lineplot(x=O2_time, y=O2, linewidth=2, color='g', ax=axes[0, 0])
-        axes[0,0].set_title('Processed vs Raw')
-        axes[0,0].legend(['Raw', 'Processed'], facecolor='w')
+        axes[0,0].set_title('Processed O2 vs Raw')
+        axes[0,0].legend(['Raw', 'Processed O2'], facecolor='w')
 
         sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0,1])
         sns.lineplot(x=O2_time, y=O2_norm, color='g', ax=axes[0,1])
-        axes[0,1].set_title('Processed vs BOLD')
-        axes[0,1].legend(['BOLD', 'Processed'], facecolor='w')
+        axes[0,1].set_title('Processed O2 vs BOLD')
+        axes[0,1].legend(['BOLD', 'Processed O2'], facecolor='w')
         
         sns.lineplot(x=np.arange(-len(O2_correlation)//2, len(O2_correlation)//2)+1, y=O2_correlation, ax=axes[1,0])
         axes[1,0].set_title('Cross-Correlation')
@@ -399,8 +788,8 @@ class stat_utils:
 
         sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1,1])
         sns.lineplot(x=time_points, y=O2_shift_norm, color='g', ax=axes[1,1])
-        axes[1,1].set_title('Shifted vs BOLD')
-        axes[1,1].legend(['BOLD', 'Shifted'], facecolor='w')
+        axes[1,1].set_title('Shifted O2 vs BOLD')
+        axes[1,1].legend(['BOLD', 'Shifted O2'], facecolor='w')
 
         # save the plot
         if verb:
@@ -421,13 +810,13 @@ class stat_utils:
 
         sns.lineplot(x='Time', y='CO2', data=df, linewidth=1, color='b', ax=axes[0, 0])
         sns.lineplot(x=O2_time, y=CO2, linewidth=2, color='r', ax=axes[0, 0])
-        axes[0,0].set_title('Processed vs Raw')
-        axes[0,0].legend(['Raw', 'Processed'], facecolor='w')
+        axes[0,0].set_title('Processed CO2 vs Raw')
+        axes[0,0].legend(['Raw', 'Processed CO2'], facecolor='w')
 
         sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0,1])
         sns.lineplot(x=CO2_time, y=CO2_norm, color='r', ax=axes[0,1])
-        axes[0,1].set_title('Processed vs BOLD')
-        axes[0,1].legend(['BOLD', 'Processed'], facecolor='w')
+        axes[0,1].set_title('Processed CO2 vs BOLD')
+        axes[0,1].legend(['BOLD', 'Processed CO2'], facecolor='w')
         
         sns.lineplot(x=np.arange(-len(CO2_correlation)//2, len(CO2_correlation)//2)+1, y=CO2_correlation, ax=axes[1,0])
         axes[1,0].set_title('Cross-Correlation')
@@ -435,8 +824,8 @@ class stat_utils:
 
         sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1,1])
         sns.lineplot(x=time_points, y=CO2_shift_norm, color='r', ax=axes[1,1])
-        axes[1,1].set_title('Shifted vs BOLD')
-        axes[1,1].legend(['BOLD', 'Shifted'], facecolor='w')
+        axes[1,1].set_title('Shifted CO2 vs BOLD')
+        axes[1,1].legend(['BOLD', 'Shifted CO2'], facecolor='w')
 
         # save the plot
         if verb:
@@ -954,7 +1343,7 @@ class shifter:
         
         return df, shifted, time_shift, pt_shift
 
-    def get_cross_correlation(self, base, sig, scan_time):
+    def get_cross_correlation(self, base, sig, scan_time, ref_shift):
         """
         Params:
             base (iterable) : reference signal (used to align signal)
@@ -963,12 +1352,14 @@ class shifter:
         Returns:
             (float) : shift value of signal
         """
-#        limit = int(30 * len(base)/scan_time)
         correlation_series = sg.correlate(base, sig, mode='full')
-#        lim_corr = correlation_series[len(correlation_series)//2-limit : len(correlation_series)//2+limit+1]
-        
-        shift_index = np.argmax(correlation_series) - (len(correlation_series)//2)
-#        shift_index = np.argmax(lim_corr) - (len(lim_corr)//2)
+#        print(ref_shift)
+        if ref_shift != None:
+            limit = int(60 * len(base)/scan_time)
+            lim_corr = correlation_series[len(correlation_series)//2-limit+ref_shift : len(correlation_series)//2+limit+1+ref_shift]
+            shift_index = np.argmax(lim_corr) - (len(lim_corr)//2) + ref_shift
+        else:
+            shift_index = np.argmax(correlation_series) - (len(correlation_series)//2)
         shift_value = scan_time/len(base) * shift_index
 #        shift_value = 0
 #        shift_index = 0
@@ -978,7 +1369,25 @@ class shifter:
             
         return shift_value, shift_index, correlation_series
 
-    def corr_align(self, base, other_time, other_sig, scan_time, time_points):
+    def raw_align(self, base, raw_other, pre_other, scan_time, time_points, ref_shift=None):
+#        plt.plot(raw_other.Data)
+#        plt.show()
+        raw_padded = self.pad_zeros(raw_other.Data)
+        shift, start, corr = self.get_cross_correlation(base, raw_padded, scan_time, ref_shift)
+        resamp = interp.interp1d(pre_other.Time+shift, pre_other.Data, fill_value='extrapolate')
+        shifted = resamp(time_points)
+        
+        if shift > 0:
+            shifted[:start] = pre_other.Data.iloc[0]
+        if shift < 0:
+            shifted[start:] = pre_other.Data.iloc[len(pre_other)-1]
+            
+        df = pd.DataFrame({ 'Time' : time_points,
+                            'Data' : shifted})
+        
+        return df, shifted, corr, shift, start
+        
+    def corr_align(self, base, other_time, other_sig, scan_time, time_points, ref_shift=None):
         '''
         Parameters:
             base: numpy array
@@ -1034,7 +1443,8 @@ class shifter:
         other_norm = sg.detrend(other_sig)
 #        shift, start, corr = self.get_cross_correlation(base_norm, other_norm, scan_time)
         other_padded = self.pad_zeros(other_norm)
-        shift, start, corr = self.get_cross_correlation(base_norm, other_padded, scan_time)
+#        print(ref_shift)
+        shift, start, corr = self.get_cross_correlation(base_norm, other_padded, scan_time, ref_shift)
 #        print(corr)
 #        print(corr[len(corr)//2])
         #construct resampler
@@ -1058,13 +1468,12 @@ class shifter:
 #        end = len(final) - len(time_points)
 #        final = final[:-end]
 #        
-#        df = pd.DataFrame({ 'Time' : time_points,
-#                            'Data' : final,
-#                            'BOLD' : base})
-        
         df = pd.DataFrame({ 'Time' : time_points,
-                            'Data' : shifted,
-                            'BOLD' : base})
+                            'Data' : shifted})
+        
+#        df = pd.DataFrame({ 'Time' : time_points,
+#                            'Data' : shifted,
+#                            'BOLD' : base})
 
 #        shifted = sg.savgol_filter(shifted, 11, 3)
         
