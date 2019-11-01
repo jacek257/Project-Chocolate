@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-
-
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -23,10 +20,16 @@ class fft_analysis:
 
     def fourier_trans(self, time_series, data, N):
         """
-        returns a tuple: (frequency domain, Power spectra, abs(power_spectra))
-
-        spacing = the distance between data points
-        data = series to be analyzed
+        Apply a fourier transformation on the data
+        
+        Parameters:
+            time_series : pandas Series or array-like
+                time series of the data that is be fourier transformed
+            data : pandas Series or array-like
+                actual data that will be fourier transformed
+                
+        Returns:
+            tuple: (frequency domain, Power spectra, abs(power_spectra))
         """
 
         spacing = time_series.max()/N
@@ -39,94 +42,122 @@ class fft_analysis:
         return (freq_dom,power_spectra,plottable_spectra)
 
 
-    def my_filter(self, f_low, f_high, freq_dom, power_spectra):
+    def my_filter(self, f_cut, freq_dom, power_spectra):
         """
-        returns power spectra that is cleaned of specific frequencies
-
-        f_low = lower frequency bound
-        f_high = upper frequency bound
-        freq_dom = frequency domain as calculated by fourier_trans()
-        power_spectra = power spectrum as calculated by fourier_trans()
+        Apply a butterworth low-pass filter on the fourier transformed data
+        
+        Parameters:
+            f_low : float
+                frequency cutoff
+            freq_dom : array-like
+                array of the frequencies
+            power_spectra : array-like
+                array of the power for each of the frequencies in the freq_dom
+                
+        Returns:
+            array-like : power spectra that is cleaned of specific frequencies
         """
         #create a copy of the power_spectra
         cp = np.copy(power_spectra)
 
-        #if f is between bounds, remove associated power
-#        for i,f in enumerate(freq_dom):
-##            if (f >= f_low) and (f <= f_high):
-##                cp[i] = 0
-##                cp[-i] = 0
-#            if f >= f_low:
-#                cp[i] = 0
-
-        b, a = sg.butter(11, f_low, 'low', analog=True)
+        # create filter
+        b, a = sg.butter(11, f_cut, 'low', analog=True)
         w, h = sg.freqs(b, a)
+        # extend filter
         resamp = interp.interp1d(w, h, fill_value='extrapolate')
         h = resamp(freq_dom)
+        # apply filter
         for i,f in enumerate(freq_dom):
             cp[i] = cp[i] * np.abs(h)[i] if i < len(h) else 0
             
         return np.copy(cp)
 
-    def fourier_filter(self, time_series, data, low_f, high_f, tr, time_points, trim):
+    def fourier_filter(self, time_series, data, f_cut, tr, time_points, trim):
         """
-        Driver module: runs fourier_trans() and my_filter() and downsamples
+        Performs a fourier transform on the data and runs it through a buttersworth filter before
+        applying an inverse fourier transform and interpolating to the new time.
+        
+        Parameters
+            time_series : pandas Series or array-like
+                The time series of the data
+            data : pandas Series or array-like
+                Data to be analyzed
+            f_cut : float
+                Frequency cut off
+            tr : float
+                Repetition time
+            time_points : pandas Series or array-like
+                Time for data to be interporlated onto
 
-        time_steps = time_step list
-        data = data to be analyzed
-        low_f = lower frequency bound
-        high_f = upper frequency bound
-        TR = repetition time: found in BOLD .json
+        Returns:
+            pandas Dataframe that contains the Time and Data after filtering and interpolating
+                
         """
         
         N = len(data)
         freq, power, disp = self.fourier_trans(time_series, data, N)
         
-        pre_invert = self.my_filter(low_f,high_f, freq, power)
+        # pass freq domain data through filter
+        pre_invert = self.my_filter(f_cut, freq, power)
         inverted = ifft(pre_invert).real
         
+        # create the target time series
         resample_ts = np.arange(time_series.min(), time_series.max()+tr, tr)
-#        print(resample_ts)
+        # interpolate to match target time series
         resampler = interp.interp1d(time_series, inverted, fill_value="extrapolate")
         
-#        df = pd.DataFrame({'Time' : time_series,
-#                           'Data' : inverted})
-    
         df = pd.DataFrame({'Time' : resample_ts,
                            'Data' : resampler(resample_ts)})
     
         if trim:
             df = stat_utils().trim_edges(df)
         
-#        df = df[df.Time > 5].reset_index(drop=True)
-#        df = df[df.Time < df.Time.max()-5].reset_index(drop=True)
-        
         return df
 
 
-    def fourier_filter_no_resample(self, time_series, data, low_f, high_f):
+    def fourier_filter_no_resample(self, time_series, data, f_cut, tr, trim):
         """
-        Driver module: runs fourier_trans() and my_filter() and does not downsample
+        Performs a fourier transform on the data and runs it through a buttersworth filter before
+        applying an inverse fourier transform
+        
+        Parameters
+            time_series : pandas Series or array-like
+                The time series of the data
+            data : pandas Series or array-like
+                Data to be analyzed
+            f_cut : float
+                Frequency cut off
+            tr : float
+                Repetition time
 
-        time_steps = time_step list
-        data = data to be analyzed
-        low_f = lower frequency bound
-        high_f = upper frequency bound
+        Returns:
+            pandas Dataframe that contains the Time and Data after filtering and interpolating
+                
         """
-        freq, power, disp = self.fourier_trans(time_series[1], data)
-        pre_invert = self.my_filter(low_f,high_f, freq, power)
+        
+        N = len(data)
+        freq, power, disp = self.fourier_trans(time_series, data, N)
+        
+        # pass freq domain data through filter
+        pre_invert = self.my_filter(f_cut, freq, power)
         inverted = ifft(pre_invert).real
-        return pd.DataFrame({'Time' : time_series,
-                             'Data' : inverted})
+        
+        df = pd.DataFrame({'Time' : time_series,
+                           'Data' : inverted})
+    
+        if trim:
+            df = stat_utils().trim_edges(df)
+        
+        return df
 
 class stat_utils:
     """docstring for stat_utils."""
 
 
     def save_plots_comb_only(self, df, O2, O2_f, 
-                   CO2, CO2_f, meants,
-                   coeff, coeff_f, comb_corr,
-                   f_path, key, verb, time_points, TR):
+                             CO2, CO2_f, meants,
+                             coeff, coeff_f, comb_corr,
+                             f_path, key, verb, time_points, TR):
         
         if verb:
             print('Creating regression plot')
@@ -516,10 +547,8 @@ class stat_utils:
             print('Creating combined plots')
             
         f, axes = plt.subplots(3, 1)
-        
-        O2_f_norm = O2_f / O2_f.std()
-        CO2_f_norm = CO2_f / CO2_f.std()
         combined = coeff[0] * O2_m_norm + coeff[1] * CO2_m_norm + coeff[2]
+        combined /= combined.std()
         
         sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0])
         sns.lineplot(x='Time', y=combined, data=CO2, color='black', ax=axes[0])
@@ -530,7 +559,12 @@ class stat_utils:
         axes[1].set_title('Cross-Correlation')
         axes[1].legend(['Cross-Correlation'], facecolor='w')
 
+        
+        O2_f_norm = O2_f / O2_f.std()
+        CO2_f_norm = CO2_f / CO2_f.std()
         combined_s = coeff_f[0] * O2_f_norm + coeff_f[1] * CO2_f_norm + coeff_f[2]
+        combined_s /= combined_s.std()
+        
         sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[2])
         sns.lineplot(x=time_points, y=combined_s, color='black', ax=axes[2])
         axes[2].set_title('BOLD vs Shifted Combination')
@@ -579,8 +613,8 @@ class stat_utils:
         return    
     
     def save_plots_no_comb_raw(self, df, O2, pre_O2, O2_f, O2_corr,
-                           CO2, CO2_f, pre_CO2, CO2_corr, meants,
-                           f_path, key, verb, time_points):
+                               CO2, CO2_f, pre_CO2, CO2_corr, meants,
+                               f_path, key, verb, time_points):
         
         if verb:
             print('Creating O2 plots')
@@ -885,94 +919,56 @@ class stat_utils:
         return
     
     def get_info(self, sigs, sig_fit):
+        '''
+        Get the coefficents to preform a linear combination of the 2 sigs to fit to sig_fit
         
-#        for sig in sigs:
-#            sig = sg.detrend(sig)
-#            sig -= sig.mean()
-#            sig /= sig.std()
+        Parameters:
+            sigs : a 2-d array [x, y]
+                a 2-d array that contains the data_points for the 2 signals
+            sig_fit :
+                an array that contains the target signal to be fit
         
-#        sig_fit -= sig_fit.mean()
-#        sig_fit = sg.savgol_filter(sig_fit, 11, 3)
-#        sig_fit = sg.detrend(sig_fit)
-#        sig_fit /= sig_fit.std()
-#        sig_cut = []
-#        
-#        for sig in sigs:
-#            sig_cut.append(sig[:len(sig_fit)])
-#            
-#        print(len(sig_cut[0]))
+        Notes:
+            the lenght of the signals in sigs must be the same length as the sig_fit signal
+            
+        Returns:
+            clf.coef_ : an array of coefficents
+            r_value : the r_value of the combination vs sig_fit
+            p_value : the p_value of the combination vs sig_fit
+        '''
+        
+        # transpose the signals add a column of 1s to account for constant
         X = np.vstack((np.array(sigs), np.ones_like(sigs[0]))).T
-#        print(len(X))
-        
-#        clf = SGD(loss='huber', alpha=0.001, max_iter=2e9, tol=1e-6, learning_rate='optimal', shuffle=True, fit_intercept=True)
+        # use stocastic average gradent decent to caculate the coefficents
         clf = Ridge(alpha=0.001, max_iter=2e9, tol=1e-6, fit_intercept=True, normalize=False, solver='sag', copy_X=True)
-        
-#        diff = len(sigs[0]) - len(sig_fit)
-#        sig_fit = pd.concat((sig_fit, pd.Series([0] * diff)))
-        
+        # calculate the coefficents
         clf.fit(X, sig_fit)
-#        print(clf.coef_)
-        
-#        n, k = X.shape
-#        y_hat = np.matrix(clf.predict(X)).T
-#        
-#        # change X and sig_fit ot nump matricies. X aslo has a column of ones added
-#        x = np.hstack((np.ones((n,1)), np.matrix(X)))
-#        y = np.matrix(sig_fit).T
-#        
-#        # degrees of freedom
-#        df = float(n-k-1)
-#        
-#        #sample var
-#        sse = np.sum(np.square(y_hat - y), axis=0)
-#        samp_var = sse/df
-#        
-#        # samp var for x
-#        samp_var_x = x.T * x
-#        
-#        # covariant matrix
-#        cov_mat = np.linalg.sqrtm(samp_var[0,0] * samp_var_x.I)
-#        
-#        # standard errors
-#        se = cov_mat.diagonal()[1:]
-#        
-#        sse = np.sum((clf.predict(X) - sig_fit) ** 2, axis=0) / float(X.shape[0] - X.shape[1])
-#        print(sse)
-#        print(sse.shape)
-#        se = np.array([np.sqrt(np.diagonal(sse * np.linalg.inv(np.dot(X.T, X))))])
-#        
-#        t_value = clf.coef_ / se
-#        p_value = 2 * (1 - stats.t.cdf(np.abs(t_value), sig_fit.shape[0] - X.shape[1]))
-        
+        # return X back to its original dimensions
         X = X.T
+        # calculate the stats for combined signal
         stat = stats.pearsonr(clf.coef_[0] * X[0] + clf.coef_[1] * X[1] + clf.coef_[2] * X[2], sig_fit)
-#        stat = stats.pearsonr(clf.coef_[0] * X[0] + clf.coef_[1] * X[1] + clf.coef_[2] * X[2] + clf.coef_[3] * X[3], sig_fit)
-#        print(stat)
-#        print()
-        return clf.coef_, stat[0], stat[1]
-        
 
-#    def get_r2(self, sig_fit, sig_obs):
-#        """
-#        gets r^2 (coefficient of determination) of sig_fit w.r.t. sig_obs
-#
-#        inputs:
-#            sig_fit (iterable) = fitted/predicted signal
-#            sig_obs (iterable) = observed signal / raw data
-#
-#        warnings:
-#            sig's must have the same lengths
-#
-#        return:
-#            (float)
-#        """
-#        if(len(sig_fit) != len(sig_fit)):
-#            print("Signals have different lengths: ", len(sig_fit) , ' &', len(sig_obs))
-#        else:
-#            sig_obs_var = np.mean(sig_obs)
-#            return 1-np.sum((sig_fit-sig_obs)**2)/np.sum((sig_obs-sig_obs_var)**2)
+        return clf.coef_, stat[0], stat[1]
 
     def resamp(self, og_time, new_time, data, shift, start):
+        '''
+        Interpolates the data from original time to the new target time
+        
+        Parameters: 
+            og_time : pandas Series or array-like
+                Time of the original data series
+            new_time : pandas Sereis or array-like
+                New time that is to be interpolated to
+            data : pandas Series or array-like
+                Data that is to be interpoalted
+            shift : float
+                The time shift between the new time and old time
+            start : int
+                The number of data points to shift between the new time and old time
+        
+        Returns:
+            shifted : 1-d numpy array of the time shifted and interpolated data
+        '''
         
         resample = interp.interp1d(og_time, data, fill_value='extrapolate')
         shifted = resample(new_time)
@@ -981,25 +977,36 @@ class stat_utils:
             shifted[:start] = data[0]
             
         if shift < 0:
-            shifted[start:] = data[len(data)-1]
-
-#        shifted = sg.savgol_filter(shifted, 11, 3)
+            extra = og_time.max() - new_time.max()
+            ex_pts = int(extra // new_time[1])
+            if ex_pts > 0:
+                safe = ex_pts + start
+                if safe < 0:
+                    shifted[safe:] = data[len(data)-1]
+            else:
+                shifted[len(data)+start:] = data[len(data)-1]
         
         return shifted
     
     def trim_edges(self, df):
+        '''
+        Trims to edges of the data that are considered noise
         
+        Parameters:
+            df : pandas Dataframe
+                Data that is to be trimmed
+        
+        Returns:
+            df : pandas Dataframe with trimmed data
+        '''
         i = len(df)-1
         change = abs((df.Data[i-1] - df.Data[i]))
-#        print(slope)
         count = 0
         
-#        print(change)
         while(df.Time[i] > df.Time.max()*0.9):
             pre_change = change
             change = abs((df.Data[i-1] - df.Data[i]))
             diff = abs(change-pre_change)
-#            print(diff)
             if diff > 5e-2:
                 break
             count += 1
@@ -1010,14 +1017,11 @@ class stat_utils:
         i = 0
         count = 0
         change = abs((df.Data[i+1] - df.Data[i]))
-#        print(slope)
         
-#        print(change)
         while(df.Time[i] < df.Time.max()*0.1):
             pre_change = change
             change = abs((df.Data[i+1] - df.Data[i]))
             diff = abs(change-pre_change)
-#            print(diff)
             if diff > 5e-2:
                 break
             count += 1
@@ -1269,91 +1273,102 @@ class shifter:
     """
     docstring for shifter.
     """
-    def edge_match(self, base, sig, tr, time_pts):
-            
-        pt_shift = 0
-#        print(base.Data.mean())
-#        print(sig.Data.mean())
-        direct = None
-        prev_direct = None
-        
-        base_match = base[base.Data > base.Data.mean()].reset_index(drop=True)
-        sig_match = sig[sig.Data > sig.Data.mean()].reset_index(drop=True)
-        
-        while True:
-            
-            start_diff = sig_match.Time[0] - base_match.Time[0]
-            end_diff = sig_match.Time[len(sig_match)-1] - base_match.Time[len(base_match)-1]
-            
-#            print(sig_match.Time[0], base_match.Time[0], np.abs(start_diff))
-#            print(sig_match.Time[len(sig_match)-1], base_match.Time[len(base_match)-1], np.abs(end_diff))
-#            print()
-#            time.sleep(3)
-            
-            if prev_direct and direct == -prev_direct:
-                break
-            
-            if end_diff < 0 and start_diff < 0:
-                prev_direct = direct
-                direct = 1
-                pt_shift += 1
-                sig_match.Time += tr
-            elif end_diff > 0 and start_diff > 0:
-                prev_direct = direct
-                direct = -1
-                pt_shift -= 1
-                sig_match.Time -= tr
-            elif start_diff > end_diff:
-                prev_direct = direct
-                direct = 1
-                pt_shift += 1
-                sig_match.Time += tr
-            elif end_diff > start_diff:
-                prev_direct = direct
-                direct = -1
-                pt_shift -= 1
-                sig_match.Time -= tr
-            elif prev_direct and direct == -prev_direct:
-                break
-            else:
-                break
-        
-        time_shift = pt_shift * tr
-        
-        resamp = interp.interp1d(sig.Time+time_shift, sig.Data, fill_value='extrapolate')
-        shifted = resamp(time_pts)
-        
-        if pt_shift > 0:
-            shifted[:pt_shift] = sig.Data[0]
-        if pt_shift < 0:
-            shifted[pt_shift:] = sig.Data[len(sig)-1]
+#    def edge_match(self, base, sig, tr, time_pts):
+#            
+#        pt_shift = 0
+##        print(base.Data.mean())
+##        print(sig.Data.mean())
+#        direct = None
+#        prev_direct = None
 #        
-#        end = len(final) - len(time_points)
-#        final = final[:-end]
+#        base_match = base[base.Data > base.Data.mean()].reset_index(drop=True)
+#        sig_match = sig[sig.Data > sig.Data.mean()].reset_index(drop=True)
 #        
-#        df = pd.DataFrame({ 'Time' : time_points,
-#                            'Data' : final,
-#                            'BOLD' : base})
-        
-        df = pd.DataFrame({ 'Time' : time_pts,
-                            'Data' : shifted,
-                            'BOLD' : base.Data})
+#        while True:
+#            
+#            start_diff = sig_match.Time[0] - base_match.Time[0]
+#            end_diff = sig_match.Time[len(sig_match)-1] - base_match.Time[len(base_match)-1]
+#            
+##            print(sig_match.Time[0], base_match.Time[0], np.abs(start_diff))
+##            print(sig_match.Time[len(sig_match)-1], base_match.Time[len(base_match)-1], np.abs(end_diff))
+##            print()
+##            time.sleep(3)
+#            
+#            if prev_direct and direct == -prev_direct:
+#                break
+#            
+#            if end_diff < 0 and start_diff < 0:
+#                prev_direct = direct
+#                direct = 1
+#                pt_shift += 1
+#                sig_match.Time += tr
+#            elif end_diff > 0 and start_diff > 0:
+#                prev_direct = direct
+#                direct = -1
+#                pt_shift -= 1
+#                sig_match.Time -= tr
+#            elif start_diff > end_diff:
+#                prev_direct = direct
+#                direct = 1
+#                pt_shift += 1
+#                sig_match.Time += tr
+#            elif end_diff > start_diff:
+#                prev_direct = direct
+#                direct = -1
+#                pt_shift -= 1
+#                sig_match.Time -= tr
+#            elif prev_direct and direct == -prev_direct:
+#                break
+#            else:
+#                break
+#        
+#        time_shift = pt_shift * tr
+#        
+#        resamp = interp.interp1d(sig.Time+time_shift, sig.Data, fill_value='extrapolate')
+#        shifted = resamp(time_pts)
+#        
+#        if pt_shift > 0:
+#            shifted[:pt_shift] = sig.Data[0]
+#        if pt_shift < 0:
+#            shifted[pt_shift:] = sig.Data[len(sig)-1]
+##        
+##        end = len(final) - len(time_points)
+##        final = final[:-end]
+##        
+##        df = pd.DataFrame({ 'Time' : time_points,
+##                            'Data' : final,
+##                            'BOLD' : base})
+#        
+#        df = pd.DataFrame({ 'Time' : time_pts,
+#                            'Data' : shifted,
+#                            'BOLD' : base.Data})
+#
+##        shifted = sg.savgol_filter(shifted, 11, 3)
+#        
+#        return df, shifted, time_shift, pt_shift
 
-#        shifted = sg.savgol_filter(shifted, 11, 3)
-        
-        return df, shifted, time_shift, pt_shift
-
-    def get_cross_correlation(self, base, sig, scan_time, ref_shift):
-        """
-        Params:
-            base (iterable) : reference signal (used to align signal)
-            sig (iterable) : signal that needs alignment
+    def get_cross_correlation(self, base, sig, scan_time, ref_shift=None):
+        '''
+        Parameters:
+            base: pandas Series or array-like
+                The base signal that the other signal will be shifted to matching
+            sig : pandas Series or array-like
+                Signal that is to be correlated
+            scan_time : float
+                Total scan time of the BOLD sequence
+            ref_shift : int or None (default=None)
+                The number of points from center that is set to be as the basis for the shift
+                
 
         Returns:
-            (float) : shift value of signal
-        """
+            shift_val : float
+                Time shift applied
+            shift_index : int 
+                Number of point shifts
+            correlation_series : numpy array
+                Cross_correlation values
+        '''
         correlation_series = sg.correlate(base, sig, mode='full')
-#        print(ref_shift)
         if ref_shift != None:
             limit = int(60 * len(base)/scan_time)
             lim_corr = correlation_series[len(correlation_series)//2-limit+ref_shift : len(correlation_series)//2+limit+1+ref_shift]
@@ -1361,26 +1376,39 @@ class shifter:
         else:
             shift_index = np.argmax(correlation_series) - (len(correlation_series)//2)
         shift_value = scan_time/len(base) * shift_index
-#        shift_value = 0
-#        shift_index = 0
-#        while shift_value < 5:
-#            shift_index += 1
-#            shift_value = scan_time/len(base) * shift_index
             
         return shift_value, shift_index, correlation_series
 
-    def raw_align(self, base, raw_other, pre_other, scan_time, time_points, ref_shift=None):
-#        plt.plot(raw_other.Data)
-#        plt.show()
+    def raw_align(self, base, raw_other, scan_time, time_points, ref_shift=None):
+        '''
+        Parameters:
+            base: pandas Series or array-like
+                The base signal that the other signal will be shifted to match
+            raw_other: pandas Dataframe or array-like
+                Raw signal with the corresponding time to be correlated
+            scan_time : float
+                Total scan time of the BOLD sequence
+            time_points : pandas Series or array-like
+                Time series for the meants
+            ref_shift : int or None (default=None)
+                The number of points from center that is set to be as the basis for the shift
+                
+
+        Returns:
+            df : pandas Dataframe 
+                Shifted signal with corresponding time point
+            shifted : numpy array 
+                Shifted signal
+            corr : numpy array 
+                Cross_correlation values
+            shift : float 
+                Time shift applied
+            start : int 
+                Number of point shifts
+        '''
         raw_padded = self.pad_zeros(raw_other.Data)
         shift, start, corr = self.get_cross_correlation(base, raw_padded, scan_time, ref_shift)
-        resamp = interp.interp1d(pre_other.Time+shift, pre_other.Data, fill_value='extrapolate')
-        shifted = resamp(time_points)
-        
-        if shift > 0:
-            shifted[:start] = pre_other.Data.iloc[0]
-        if shift < 0:
-            shifted[start:] = pre_other.Data.iloc[len(pre_other)-1]
+        shifted = stat_utils().resamp(raw_other.Time+shift, raw_other.Time, raw_other.Data, shift, start)
             
         df = pd.DataFrame({ 'Time' : time_points,
                             'Data' : shifted})
@@ -1390,95 +1418,37 @@ class shifter:
     def corr_align(self, base, other_time, other_sig, scan_time, time_points, ref_shift=None):
         '''
         Parameters:
-            base: numpy array
+            base: pandas Series or array-like
                 The base signal that the other signal will be shifted to matching
-            other: numpy array
-                The signal to be shifted
+            other_time: pandas Series or array-like
+                Time series of the signal to be correlated
+            other_sig : pandas Series or array-like
+                Signal that is to be correlated
+            scan_time : float
+                Total scan time of the BOLD sequence
+            time_points : pandas Series or array-like
+                Time series for the meants
+            ref_shift : int or None (default=None)
+                The number of points from center that is set to be as the basis for the shift
+                
 
         Returns:
-            shifted: numpy array
-                The shifted other signal
+            df : pandas Dataframe of the shifted signal with corresponding time point
+            shifted : numpy array of shifted signal
+            corr : numpy array of cross_correlation values
+            shift : float of the time shift applied
+            start : int of the number of point shifts
         '''
-#        shift, start, corr = self.get_cross_correlation(base, other_sig, scan_time)
-#        base_norm = base - base.mean()
-#        base_norm /= base_norm.std()
 
-#        other_norm = other_sig - other_sig.mean()
-#        other_norm /= other_norm.std()
+        other_padded = self.pad_zeros(other_sig)
+        shift, start, corr = self.get_cross_correlation(base, other_padded, scan_time, ref_shift)
         
-#        print(len(base_norm))
-#        print(len(other_norm))
+        shifted = stat_utils().resamp(other_time+shift, time_points, other_sig, shift, start)
         
-#        _, gd= sg.group_delay((base_norm, other_norm))
-#        print(gd)
-#        print(len(gd))
-        
-#        other_norm= sg.savgol_filter(other_norm, 35, 3)
-        
-#        plt.plot(other_norm)
-#        plt.show()
-#        
-#        other_sep = len(other_norm)//4
-#        left_edge = np.argmax(other_norm[:other_sep])
-##        print(left_edge)
-#        right_edge = np.argmax(other_norm[other_sep*3:])+other_sep*3
-##        print(right_edge)
-#        other_norm = other_norm[left_edge:right_edge]
-#        
-#        base_sep = len(base_norm)//4
-#        left_edge = np.argmax(base_norm[:base_sep])
-##        print(left_edge)
-#        right_edge = np.argmax(base_norm[base_sep*3:])+base_sep*3
-##        print(right_edge)
-#        base_norm = base_norm[left_edge:right_edge]
-        
-#        plt.plot(other_norm)
-#        plt.show()
-
-        #get shifts
-#        print(len(other_sig))
-#        print(len(base))
-        
-        base_norm = sg.detrend(base)
-        other_norm = sg.detrend(other_sig)
-#        shift, start, corr = self.get_cross_correlation(base_norm, other_norm, scan_time)
-        other_padded = self.pad_zeros(other_norm)
-#        print(ref_shift)
-        shift, start, corr = self.get_cross_correlation(base_norm, other_padded, scan_time, ref_shift)
-#        print(corr)
-#        print(corr[len(corr)//2])
-        #construct resampler
-#        print(shift, start)
-#        exit()
-        resamp = interp.interp1d(other_time+shift, other_sig, fill_value='extrapolate')
-        shifted = resamp(time_points)
-        
-        if shift > 0:
-            shifted[:start] = other_sig[0]
-#            prepend = [other_sig.iloc[0]] * start
-#            prepend.append(other_sig)
-#            final = prepend[:-start]
-        if shift < 0:
-            shifted[start:] = other_sig[len(other_sig)-1]
-#            other_sig = other_sig[-start:]
-#            print(-start)
-#            append = [other_sig.iloc[-1]] * -start
-#            final = other_sig.append(append)
-#        
-#        end = len(final) - len(time_points)
-#        final = final[:-end]
-#        
         df = pd.DataFrame({ 'Time' : time_points,
                             'Data' : shifted})
         
-#        df = pd.DataFrame({ 'Time' : time_points,
-#                            'Data' : shifted,
-#                            'BOLD' : base})
-
-#        shifted = sg.savgol_filter(shifted, 11, 3)
-        
         return df, shifted, corr, shift, start
-#        return df, df.Data, corr
         
     def pad_zeros(self, sig):
         pre = np.zeros_like(sig)
@@ -1486,179 +1456,25 @@ class shifter:
         padded = np.concatenate((pre, sig, post))
         return padded
 
-class optimizer:
-    """docstring for optimizer."""
-
-    def __grad_constant_GLM(self, c1,c2,c3,s1n, s2n, bn):
-        """
-        part of mathematical gradient which is present in all components
-
-        params:
-            c1 (float) = constant 1
-            c2 (float) = constant 2
-            c3 (float) = constant 3
-            s1n (float) = signal1 at time n
-            s2n (float) = signal2 at time n
-            bn (float) = base signal at time n
-
-        returns:
-            (float)
-        """
-        return(2*(c1*s1n + c2*s2n + c3 - bn))
-    def __grad_C1_GLM(self, C1, C2, C3, S1, S2, B):
-        """
-        component 1 of gradient
-
-        params:
-            C1 (float) = constant 1
-            C2 (float) = constant 2
-            C3 (float) = constant 3
-            S1 (iterable) = signal 1
-            S2 (iterable) = signal 2
-            B (iterable) = base signal
-
-        returns:
-            (float)
-        """
-        buffer = 0.0
-        for s1n, s2n, bn in zip(S1, S2, B):
-            buffer += self.__grad_constant_GLM(C1, C2, C3, s1n, s2n, bn) * s1n/len(S1)
-        return buffer
-
-    def __grad_C2_GLM(self, C1, C2, C3, S1, S2, B):
-        """
-        component 2 of gradient
-
-        params:
-            C1 (float) = constant 1
-            C2 (float) = constant 2
-            C3 (float) = constant 3
-            S1 (iterable) = signal 1
-            S2 (iterable) = signal 2
-            B (iterable) = base signal
-
-        returns:
-            (float)
-        """
-        buffer = 0.0
-        for s1n, s2n, bn in zip(S1, S2, B):
-            buffer += self.__grad_constant_GLM(C1, C2, C3, s1n, s2n, bn) * s2n/len(S1)
-        return buffer
-
-    def __grad_C3_GLM(self, C1, C2, C3, S1, S2, B):
-        """
-        component 3 of gradient
-
-        params:
-            C1 (float) = constant 1
-            C2 (float) = constant 2
-            C3 (float) = constant 3
-            S1 (iterable) = signal 1
-            S2 (iterable) = signal 2
-            B (iterable) = base signal
-
-        returns:
-            (float)
-        """
-        buffer = 0.0
-        for s1n, s2n, bn in zip(S1, S2, B):
-            buffer += self.__grad_constant_GLM(C1, C2, C3, s1n, s2n, bn)/len(S1)
-        return buffer
-
-    def linear_optimize_GLM(self, S1, S2, B, init_tuple = (0,0,0), descent_speed=.1, lifespan = 10000):
-        """
-        linear coefficient optimizer by gradient descent
-
-            params:
-                S1 (iterable) = signal 1 (O2/CO2)
-                S2 (iterable) = signal 2 (CO2/O2)
-                B (iterable) = base signal (BOLD)
-                init_tuple (c1, c2, c3) = initial coefficeint guess
-                descent_speed (float) = descending step size
-                lifespan = number of descending steps
-
-        Warnings:
-            non-stochastic gradient descent is extremely sensitive to local minima
-
-        returns:
-            (C1 (float), C2 (float), C3 (float)) where: C1 * S1 + C2 * S2 + C3 = B
-        """
-        factor1 = np.max(S1)
-        factor2 = np.max(S2)
-        factorB = np.max(B)
-
-        S1 = S1/factor1
-        S2 = S2/factor2
-        B = B/factorB
-
-        curr_C1 = init_tuple[0]*factor1/factorB
-        curr_C2 = init_tuple[1]*factor2/factorB
-        curr_C3 = init_tuple[2]/factorB
-
-
-        for i in tqdm(range(lifespan)):
-            curr_C1 = curr_C1 - (descent_speed* self.__grad_C1_GLM(curr_C1, curr_C2, curr_C3, S1, S2, B))
-            curr_C2 = curr_C2 - (descent_speed* self.__grad_C2_GLM(curr_C1, curr_C2, curr_C3, S1, S2, B))
-            curr_C3 = curr_C3 - (descent_speed* self.__grad_C3_GLM(curr_C1, curr_C2, curr_C3, S1, S2, B))
-
-        return_tuple = (curr_C1*factorB/factor1, curr_C2*factorB/factor2, curr_C3*factorB)
-
-        S1 = S1*factor1
-        S2 = S2*factor2
-        B = B*factorB
-        return return_tuple
-
-    def stochastic_optimize_GLM(self, S1, S2, B, init_tuple = (0,0,0), descent_speed=.1, lifespan = 10000, p_factor = .9):
-        """
-        linear coefficient optimizer by stochastic gradient descent
-
-        params:
-            S1 (iterable) = signal 1 (O2/CO2)
-            S2 (iterable) = signal 2 (CO2/O2)
-            B (iterable) = base signal (BOLD)
-            init_tuple (c1, c2, c3) = initial coefficeint guess
-            descent_speed (float) = descending step size
-            lifespan = number of descending steps
-            p_factor = momentum constant (determines the contribution of momentum and slope)
-
-        returns:
-            (C1 (float), C2 (float), C3 (float)) where: C1 * S1 + C2 * S2 + C3 = B
-        """
-        factor1 = np.max(S1)
-        factor2 = np.max(S2)
-        factorB = np.max(B)
-
-        S1 = S1/factor1
-        S2 = S2/factor2
-        B = B/factorB
-
-        curr_C1 = init_tuple[0]*factor1/factorB
-        curr_C2 = init_tuple[1]*factor2/factorB
-        curr_C3 = init_tuple[2]/factorB
-
-        pC1 = 0.0
-        pC2 = 0.0
-        pC3 = 0.0
-
-        for i in tqdm(range(lifespan)):
-            pC1 = p_factor*pC1 + (1.0-p_factor)*self.__grad_C1_GLM(curr_C1, curr_C2, curr_C3, S1, S2, B)
-            pC2 = p_factor*pC2 + (1.0-p_factor)*self.__grad_C2_GLM(curr_C1, curr_C2, curr_C3, S1, S2, B)
-            pC3 = p_factor*pC3 + (1.0-p_factor)*self.__grad_C3_GLM(curr_C1, curr_C2, curr_C3, S1, S2, B)
-
-            curr_C1 = curr_C1 - (descent_speed* pC1)
-            curr_C2 = curr_C2 - (descent_speed* pC2)
-            curr_C3 = curr_C3 - (descent_speed* pC3)
-
-        return_tuple = (curr_C1*factorB/factor1, curr_C2*factorB/factor2, curr_C3*factorB)
-
-        S1 = S1*factor1
-        S2 = S2*factor2
-        B = B*factorB
-        return return_tuple
 
 class parallel_processing:
+    '''
+    This class is to allow there to be processing multiple FEATs at once
+    '''
     
     def kill_unending(self, processes, verb):
+        '''
+        Kills processes if flirt has been running for too long so the FEAT can continue
+        
+        Parameters:
+            processes : array-like
+                List of processes that are being run
+            verb : boolean
+                Flag to turn on verbose output
+                
+        Returns:
+            Nothing
+        '''
         proc = subprocess.Popen("ps -e | grep flirt", encoding='utf-8', stdout=subprocess.PIPE, shell=True)
 
         outs = proc.communicate()[0].split('\n')
@@ -1668,11 +1484,33 @@ class parallel_processing:
                 time = parts[2].split(':')
                 secs = int(time[0])*3600 + int(time[1])*60 + int(time[2])
                 if secs > 900:
+                    if verb:
+                        print('Killing process, flirt taking too long')
                     os.kill(int(parts[0]), signal.SIGTERM)
         
         return
     
     def get_next_avail(self, processes, verb, limit, key, s_name):
+        '''
+        Managues the queue for processes
+        
+        Parameters:
+            processes : array-like
+                List of processes that are being run
+            verb : boolean
+                Flag to turn on verbose output
+            limit : int
+                Number of processes that can be ran at once
+            key : str
+                What type of analysis is being done
+            s_name : str
+                Name of the script that is being run
+        
+        Returns:
+            index : int
+                Index of the in the processing queue that has become open
+        '''
+        
         msg = False
         spin = '|/-\\'
         cursor = 0
@@ -1703,6 +1541,23 @@ class parallel_processing:
         return processes.index(None)
     
     def wait_remaining(self, processes, verb, key, s_name):
+        '''
+        Wait for the queue to empty
+        
+        Parameters:
+            processes : array-like
+                List of processes that are being run
+            verb : boolean
+                Flag to turn on verbose output
+            key : str
+                What type of analysis is being done
+            s_name : str
+                Name of the script that is being run
+        
+        Returns:
+            Nothing
+        '''
+        
         msg = False
         spin = '|/-\\'
         cursor = 0
