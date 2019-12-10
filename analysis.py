@@ -218,7 +218,7 @@ class stat_utils:
                         f_path, key, verb, time_points, TR):
 
         # set the size of the graphs
-        sns.set(rc={'figure.figsize':(30,20)})
+        sns.set(rc={'figure.figsize':(60,40)})
         plt.rc('legend', fontsize='x-large')
         plt.rc('xtick', labelsize='x-large')
         plt.rc('axes', titlesize='x-large')
@@ -305,7 +305,6 @@ class stat_utils:
         
         if verb:
             print('Creating regression plot')     
-        sns.set(rc={'figure.figsize':(30,20)})   
         f, axes = plt.subplots(2, 1)
         
         sns.lineplot(x=time_points, y=meants_norm, color='blue', ax=axes[0])
@@ -457,7 +456,7 @@ class stat_utils:
     def save_plots_comb(self, df, O2, O2_m, O2_f, O2_corr,
                         CO2, CO2_m, CO2_f, CO2_corr, meants,
                         coeff, coeff_f, comb_corr,
-                        f_path, key, verb, time_points):
+                        f_path, key, verb, time_points, disp):
         
         if verb:
             print('Creating O2 plots')
@@ -468,12 +467,15 @@ class stat_utils:
         plt.rc('xtick', labelsize='medium')
         plt.rc('ytick', labelsize='x-small')
         plt.rc('axes', titlesize='medium')
+        plt.ion()
+        plt.show()
 
         meants_norm = meants / meants.std()
         O2_norm = O2.Data / O2.Data.std()
         O2_m_norm = O2_m.Data / O2_m.Data.std()
         
         f, axes = plt.subplots(2, 2)
+        f.suptitle(f_path[:-4].split('/')[-1])
         
         sns.lineplot(x='Time', y='O2', data=df, color='b', ax=axes[0, 0])
         sns.lineplot(x='Time', y='Data', data=O2, color='g', ax=axes[0, 0])
@@ -498,17 +500,21 @@ class stat_utils:
             print('Saving O2 plot for', f_path)
 
         save_path = save_path = f_path[:-4]+'/' + key + 'O2.png'
+        if disp:
+            plt.draw()
+            plt.pause(0.001)
         plt.savefig(save_path)
         if verb:
             print('Saving complete')
-#        plt.show()
-        f.clf()
-        plt.close(fig=f)
+#        plt.show(block=False)
+#        f.clf()
+#        plt.close(fig=f)
         
         if verb:
             print('Creating CO2 plots')
             
         f, axes = plt.subplots(2, 2)
+        f.suptitle(f_path[:-4].split('/')[-1])
         
         CO2_norm = CO2.Data / CO2.Data.std()
         CO2_m_norm = CO2_m.Data / CO2_m.Data.std()
@@ -516,7 +522,7 @@ class stat_utils:
         sns.lineplot(x='Time', y='CO2', data=df, color='b', ax=axes[0, 0])
         sns.lineplot(x='Time', y='Data', data=CO2, color='r', ax=axes[0, 0])
         axes[0, 0].set_title('Raw CO2 vs Processed CO2')
-        axes[0, 0].legend(['Raw O2', 'Processed O2'], facecolor='w')
+        axes[0, 0].legend(['Raw CO2', 'Processed CO2'], facecolor='w')
 
         sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0, 1])
         sns.lineplot(x='Time', y=CO2_norm, data=CO2, color='r', ax=axes[0, 1])
@@ -536,17 +542,22 @@ class stat_utils:
             print('Saving CO2 plot for', f_path)
 
         save_path = save_path = f_path[:-4]+'/' + key + 'CO2.png'
+        if disp:
+            plt.draw()
+            plt.pause(0.001)
         plt.savefig(save_path)
         if verb:
             print('Saving complete')
-#        plt.show()
-        f.clf()
-        plt.close(fig=f)
+#        plt.show(block=False)
+#        f.clf()
+#        plt.close(fig=f)
         
         if verb:
             print('Creating combined plots')
             
         f, axes = plt.subplots(3, 1)
+        f.suptitle(f_path[:-4].split('/')[-1])
+        
         combined = coeff[0] * O2_m_norm + coeff[1] * CO2_m_norm + coeff[2]
         combined /= combined.std()
         
@@ -569,22 +580,27 @@ class stat_utils:
         sns.lineplot(x=time_points, y=combined_s, color='black', ax=axes[2])
         axes[2].set_title('BOLD vs Shifted Combination')
         axes[2].legend(['BOLD', 'Shifted Combination'], facecolor='w')
-
+        
         if verb:
             print('Saving combined plot for', f_path)
 
         save_path = save_path = f_path[:-4]+'/' + key + 'combined.png'
+        if disp:
+            plt.draw()
+            plt.pause(0.001)
         plt.savefig(save_path)
         if verb:
             print('Saving complete')
-#        plt.show()
-        f.clf()
-        plt.close(fig=f)
+#        plt.show(block=False)
+#        f.clf()
+#        plt.close(fig=f)
         
         if verb:
             print('Creating stacked plot')
         
         f, axes = plt.subplots(2, 1)
+        f.suptitle(f_path[:-4].split('/')[-1])
+        
         sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0])
         sns.lineplot(x='Time', y=O2_m_norm, data=O2_m, color='g', ax=axes[0])
         sns.lineplot(x='Time', y=CO2_m_norm, data=CO2_m, color='r', ax=axes[0])
@@ -603,12 +619,15 @@ class stat_utils:
             print('Saving stacked plot for', f_path)
 
         save_path = save_path = f_path[:-4]+'/' + key + 'stacked.png'
+        if disp:
+            plt.draw()
+            plt.pause(0.001)
         plt.savefig(save_path)
         if verb:
             print('Saving complete')
-#        plt.show()
-        f.clf()
-        plt.close(fig=f)
+#        plt.show(block=False)
+#        f.clf()
+#        plt.close(fig=f)
         
         return    
     
@@ -939,10 +958,14 @@ class stat_utils:
         
         # transpose the signals add a column of 1s to account for constant
         X = np.vstack((np.array(sigs), np.ones_like(sigs[0]))).T
+#        print(X)
+#        print(X.shape)
+#        print(type(X))
+        X_contig = np.ascontiguousarray(X)
         # use stocastic average gradent decent to caculate the coefficents
         clf = Ridge(alpha=0.001, max_iter=2e9, tol=1e-6, fit_intercept=True, normalize=False, solver='sag', copy_X=True)
         # calculate the coefficents
-        clf.fit(X, sig_fit)
+        clf.fit(X_contig, sig_fit)
         # return X back to its original dimensions
         X = X.T
         # calculate the stats for combined signal
@@ -1037,8 +1060,8 @@ class peak_analysis:
 
     def peak_four(self, df, verb, file, tr, time_pts, trough):
         
-        f_O2 = fft_analysis().fourier_filter_no_resample(df.Time, df.O2, 2/60, 25/60)
-        f_CO2 = fft_analysis().fourier_filter_no_resample(df.Time, df.CO2, 2/60, 25/60)
+#        f_O2 = fft_analysis().fourier_filter_no_resample(df.Time, df.O2, 1/60, tr, trim=True)
+        f_CO2 = fft_analysis().fourier_filter_no_resample(df.Time, df.CO2, 1/60, tr, trim=True)
         
         resamp_tp = np.arange(0, df.Time.max(), tr)
 
@@ -1047,16 +1070,18 @@ class peak_analysis:
         O2_df = df.drop(columns=['CO2'])
         O2_df = O2_df.iloc[O2_data]
         
-        f_O2_resamp = interp.interp1d(f_O2.Time, f_O2.Data, fill_value='extrapolate')
-        f_O2_final = f_O2_resamp(O2_df.Time)
+#        f_O2_resamp = interp.interp1d(f_O2.Time, f_O2.Data, fill_value='extrapolate')
+#        f_O2_final = f_O2_resamp(O2_df.Time)
         
-#        sns.lineplot(data=f_O2_final)
-#        sns.lineplot(data=O2_df.O2)
+#        sns.lineplot(x=df.Time, y=df.O2)
+#        sns.lineplot(x=O2_df.Time, y=f_O2_final)
+#        sns.lineplot(x=O2_df.Time, y=O2_df.O2)
 #        plt.show()
         
-        O2_df['cmp'] = O2_df.O2 < f_O2_final
-        
-        O2_valid_df = O2_df[O2_df.cmp == True]
+#        O2_df['cmp'] = O2_df.O2 < f_O2_final
+#        
+#        O2_valid_df = O2_df[O2_df.cmp == True]
+        O2_valid_df = O2_df
         
 #        O2_valid_df = O2_valid_df[O2_valid_df.Time > 5].reset_index(drop=True)
 #        O2_valid_df = O2_valid_df[O2_valid_df.Time < O2_valid_df.Time.max()-5].reset_index(drop=True)
@@ -1066,15 +1091,15 @@ class peak_analysis:
         O2_final_df = pd.DataFrame({'Time' : resamp_tp,
                                     'Data' : O2_resamp(resamp_tp)})
         
-        O2_final_df = self._trim_edges(O2_final_df)
+        O2_final_df = stat_utils().trim_edges(O2_final_df)
         
 #        sns.lineplot(data=O2_final_df.Data)
 #        plt.show()
         
         if trough:
-            CO2_data, _ = sg.find_peaks(df.CO2.apply(lambda x:x*-1), prominence=3)
+            CO2_data, _ = sg.find_peaks(df.CO2.apply(lambda x:x*-1), prominence=3, width=20)
         else:
-            CO2_data, _ = sg.find_peaks(df.CO2, prominence=3) 
+            CO2_data, _ = sg.find_peaks(df.CO2, prominence=3, width=30) 
         
         CO2_df = df.drop(columns=['O2'])
         CO2_df = CO2_df.iloc[CO2_data]
@@ -1082,9 +1107,11 @@ class peak_analysis:
         f_CO2_resamp = interp.interp1d(f_CO2.Time, f_CO2.Data , fill_value='extrapolate')
         f_CO2_final = f_CO2_resamp(CO2_df.Time)
         
-#        sns.lineplot(data=f_CO2_final)
-#        sns.lineplot(data=CO2_df.CO2)
+#        sns.lineplot(x=df.Time, y=df.CO2)
+#        sns.lineplot(x=CO2_df.Time, y=f_CO2_final)
+#        sns.lineplot(x=CO2_df.Time, y=CO2_df.CO2)
 #        plt.show()
+        
         
         if trough:
             CO2_df['cmp'] = CO2_df.CO2 < f_CO2_final
@@ -1102,7 +1129,7 @@ class peak_analysis:
         CO2_final_df = pd.DataFrame({'Time' : resamp_tp,
                                      'Data' : CO2_resamp(resamp_tp)})
         
-        CO2_final_df = self._trim_edges(CO2_final_df)
+        CO2_final_df = stat_utils().trim_edges(CO2_final_df)
         
 #        sns.lineplot(data=CO2_final_df.Data)
 #        plt.show()
@@ -1156,7 +1183,7 @@ class peak_analysis:
     
             # add peak overlay onto the scatterplot
             sns.lineplot(x=O2_final_df.Time, y=O2_final_df.Data, linewidth=2, color='g')
-            plt.show()
+#            plt.show()
             plt.close()
     
             # ask user if the peak finding was good
@@ -1194,7 +1221,7 @@ class peak_analysis:
     
             # add peak overlay onto the scatterplot
             sns.lineplot(x=CO2_final_df.Time, y=CO2_final_df.Data, linewidth=2, color='r')
-            plt.show()
+#            plt.show()
             plt.close()
     
             # ask user if the peak finding was good
@@ -1215,8 +1242,15 @@ class peak_analysis:
 
     def get_wlen(self, sig_time, sig):
 
-        freq,_,power = fft_analysis().fourier_trans(max(sig_time)/len(sig_time), sig)
-        window_it = np.argmax(power[25:500])+25
+        freq,_,disp = fft_analysis().fourier_trans(sig_time, sig, len(sig))
+#        plt.plot(sig)
+#        plt.show()
+#        plt.plot(disp)
+#        plt.show()
+#        plt.plot(disp[25:500])
+#        plt.show()
+#        exit()
+        window_it = np.argmax(disp[25:500])+25
         freq_val = freq[window_it] # this is the most prominent frequency
         window_mag = 1/freq_val
 
@@ -1229,7 +1263,7 @@ class peak_analysis:
         return window_length
 
 
-    def block_signal(self, sig_time, sig, time_pts):
+    def block_signal(self, sig_time, sig, tr):
         """
         Params:
             sigtime (iterable) = the sampling time points of sig
@@ -1238,34 +1272,48 @@ class peak_analysis:
         Return: (iterable)
             Peak found time-series which aligns with base_timeit
         """
+
+        time_pts = np.arange(sig_time.min(), sig_time.max()+tr, tr)
         cpy = sig
         cpy = cpy.reset_index(drop=True)
+#        cpy = []
+#        time = []
         count = 0
         
 #        if sig_time.max() < 10:
 #            sig_time = sig_time * 60
 
         window_length = self.get_wlen(sig_time, cpy)
-
+#        plt.plot(sig)
+#        plt.show()
         for i in range(0,len(cpy),window_length):
             for j in range(i, i+window_length):
                 if j < len(cpy):
                     cpy[j] = cpy[cpy[i:i+window_length].idxmax()]
+#                    index = sig[i:i+window_length].idxmax()
+#                    cpy.append(sig[index])
+#                    time.append(sig_time[index])
             count += 1
-
+#        plt.plot(cpy)
+#        plt.show()
         # get the sampling freq
         fs = len(cpy)/np.max(sig_time)
         # get cutoff freq
         fc = count / np.max(sig_time)
         w = fc / (fs / 2)
 
-        b, a = sg.butter(4, w, 'low', analog=False)
+        b, a = sg.butter(5, w, 'low', analog=False)
         filtered = sg.filtfilt(b, a, cpy)
-
-        return pd.DataFrame({'Time' : sig_time,
-                             'Data' : filtered})
+#        plt.plot(filtered)
+#        plt.show()
+#        return pd.DataFrame({'Time' : sig_time,
+#                             'Data' : filtered})
 #        signal_resampler = interp.interp1d(sig_time, filtered, fill_value='extrapolate')
-#        signal_resampled = signal_resampler(time_pts)
+        signal_resampled = stat_utils().resamp(sig_time, time_pts, filtered, 0, 0)
+#        plt.plot(signal_resampled)
+#        plt.show()
+        return pd.DataFrame({'Time' : time_pts,
+                             'Data' : signal_resampled})
 #
 #        return signal_resampled
 
@@ -1368,12 +1416,19 @@ class shifter:
             correlation_series : numpy array
                 Cross_correlation values
         '''
+#        plt.plot(base)
+#        plt.plot(sig)
+#        plt.show()
         correlation_series = sg.correlate(base, sig, mode='full')
         if ref_shift != None:
-            limit = int(60 * len(base)/scan_time)
+            limit = int(30 * len(base)/scan_time)
             lim_corr = correlation_series[len(correlation_series)//2-limit+ref_shift : len(correlation_series)//2+limit+1+ref_shift]
+#            plt.plot(lim_corr)
+#            plt.show()
             shift_index = np.argmax(lim_corr) - (len(lim_corr)//2) + ref_shift
         else:
+#            plt.plot(correlation_series)
+#            plt.show()
             shift_index = np.argmax(correlation_series) - (len(correlation_series)//2)
         shift_value = scan_time/len(base) * shift_index
             
@@ -1440,8 +1495,8 @@ class shifter:
             start : int of the number of point shifts
         '''
 
-        other_padded = self.pad_zeros(other_sig)
-        shift, start, corr = self.get_cross_correlation(base, other_padded, scan_time, ref_shift)
+#        other_padded = self.pad_zeros(other_sig)
+        shift, start, corr = self.get_cross_correlation(base, other_sig, scan_time, ref_shift)
         
         shifted = stat_utils().resamp(other_time+shift, time_points, other_sig, shift, start)
         
