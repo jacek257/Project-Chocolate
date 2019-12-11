@@ -36,6 +36,7 @@ parser.add_argument("-o", "--overwrite", action='store_true', help='overwrite ex
 parser.add_argument("-m", "--manual", action='store_true', help='switch analysis to manual')
 parser.add_argument("-s", "--sh", action='store_true', help='process SH cohort')
 parser.add_argument("-w", "--wh", action='store_true', help='process WH cohort')
+parser.add_argument("-i", "--invert", action='store_true', help='process failures by inverting O2 and CO2 detection and have no time_shift')
 
 
 #get the positional arguments
@@ -51,6 +52,7 @@ block = True if args.block else False
 man = True if args.manual else False
 sh = True if args.sh else False
 wh = True if args.wh else False
+invert = True if args.invert else False
 
 ###########set directories (TODO, automate)
 home_dir = '/media/ke/8tb_part2/FSL_work/'
@@ -448,9 +450,9 @@ for typ in ['block']:
         elif block:
             if verb:
                 print('Starting block for', id + '_' + date)
-            pre_O2 = analysis.peak_analysis().block_signal(endTidal.Time, endTidal.O2.apply(lambda x:x*-1), tr)
+            pre_O2 = analysis.peak_analysis().block_signal(endTidal.Time, endTidal.O2.apply(lambda x:x*-1), tr, invert)
             pre_O2.Data *= -1
-            pre_CO2 = analysis.peak_analysis().block_signal(endTidal.Time, endTidal.CO2, tr)
+            pre_CO2 = analysis.peak_analysis().block_signal(endTidal.Time, endTidal.CO2, tr, invert)
 
         elif trough:
             if verb:
@@ -476,7 +478,7 @@ for typ in ['block']:
         if verb:
             print('Shifting O2')
         # get O2 shift   
-        full_O2, processed_O2, O2_corr, O2_shift, O2_start = analysis.shifter().corr_align(meants, pre_O2.Time, pre_O2.Data, scan_time, time_pts, None) # no ref_shift need for O2
+        full_O2, processed_O2, O2_corr, O2_shift, O2_start = analysis.shifter().corr_align(meants, pre_O2.Time, pre_O2.Data, scan_time, time_pts, None, invert) # no ref_shift need for O2
 #        plt.plot(O2_corr)
 #        plt.show()
 #        plt.plot(processed_O2)
@@ -487,7 +489,7 @@ for typ in ['block']:
         if verb:
             print('Shifting CO2')
         # get CO2 shift
-        full_CO2, processed_CO2, CO2_corr, CO2_shift, CO2_start = analysis.shifter().corr_align(meants, pre_CO2.Time, pre_CO2.Data, scan_time, time_pts, O2_start) # use O2 shift as ref for CO2 shift
+        full_CO2, processed_CO2, CO2_corr, CO2_shift, CO2_start = analysis.shifter().corr_align(meants, pre_CO2.Time, pre_CO2.Data, scan_time, time_pts, O2_start, invert) # use O2 shift as ref for CO2 shift
 #        plt.plot(CO2_corr)
 #        plt.show()
 #        plt.plot(processed_CO2)
@@ -502,7 +504,7 @@ for typ in ['block']:
         if verb:
             print('Shifting Combination')
         # get the shift for the combination
-        full_comb, processed_comb, comb_corr, comb_shift, comb_start = analysis.shifter().corr_align(meants, time_pts, combined, scan_time, time_pts, None)
+        full_comb, processed_comb, comb_corr, comb_shift, comb_start = analysis.shifter().corr_align(meants, time_pts, combined, scan_time, time_pts, None, invert)
         # add the combined shift to O2 and CO2 shifts
         O2_f_shift = O2_shift + comb_shift
         CO2_f_shift = CO2_shift + comb_shift
@@ -520,6 +522,9 @@ for typ in ['block']:
     
         # get the combine the final shift signals and get their r and p values
         coeff_f, comb_f_r, comb_f_p = analysis.stat_utils().get_info([processed_O2_f, processed_CO2_f], meants)
+        
+#        processed_O2_f, extend_time = analysis.stat_utils().resamp_f(pre_O2.Time + O2_f_shift, time_pts, pre_O2.Data, O2_f_shift, O2_start+comb_start, tr)
+#        processed_CO2_f, extend_time = analysis.stat_utils().resamp_f(pre_CO2.Time + CO2_f_shift, time_pts, pre_CO2.Data, CO2_f_shift, CO2_start+comb_start, tr)
 
         # save the relevant information into the ET_dict
         ET_dict['O2_shift'].append(O2_shift)
@@ -559,11 +564,15 @@ for typ in ['block']:
             np.savetxt(save_O2, processed_O2_f, delimiter='\t')
             np.savetxt(save_CO2, processed_CO2_f, delimiter='\t')
     
-            # save and create plots (shifts)
+#            # save and create plots (shifts)
+#            analysis.stat_utils().save_plots_comb_extend(df=endTidal, O2=pre_O2, O2_m=full_O2, O2_f=processed_O2_f, O2_corr=O2_corr,
+#                                                         CO2=pre_CO2, CO2_m=full_CO2, CO2_f=processed_CO2_f, CO2_corr=CO2_corr, meants=meants,
+#                                                         coeff=coeff, coeff_f=coeff_f, comb_corr=comb_corr, extend_time=extend_time,
+#                                                         f_path=f_path, key=key, verb=verb, time_points=time_pts, disp=disp)
             analysis.stat_utils().save_plots_comb(df=endTidal, O2=pre_O2, O2_m=full_O2, O2_f=processed_O2_f, O2_corr=O2_corr,
-                                                  CO2=pre_CO2, CO2_m=full_CO2, CO2_f=processed_CO2_f, CO2_corr=CO2_corr, meants=meants,
-                                                  coeff=coeff, coeff_f=coeff_f, comb_corr=comb_corr,
-                                                  f_path=f_path, key=key, verb=verb, time_points=time_pts, disp=disp)
+                                                         CO2=pre_CO2, CO2_m=full_CO2, CO2_f=processed_CO2_f, CO2_corr=CO2_corr, meants=meants,
+                                                         coeff=coeff, coeff_f=coeff_f, comb_corr=comb_corr,
+                                                         f_path=f_path, key=key, verb=verb, time_points=time_pts, disp=disp)
     
     if verb:
         print()
@@ -677,7 +686,6 @@ for typ in ['block']:
         
     # get the stats
     for i in range(len(df)):        
-        add = True
 
         output_dir = feat_dir+key+df.ID[i]+'_'+df.Date[i]
 #        output_dir = '/media/ke/8tb_part2/FSL_work/feat/both_shift/'+key+df.ID[i]+'_'+df.Date[i]
@@ -701,9 +709,15 @@ for typ in ['block']:
         except FileNotFoundError:
             warnings['ID'].append(df.ID[i] + '_' + df.Date[i])
             warnings['warning'].append('No cluster_zstat1.txt')
-            add = False
             if verb:
                 print('No cluster_zstat1.txt')
+                
+            z1 = { 'ID' : [df.ID[i]+'_'+df.Date[i]],
+                   'type' : [key],
+                   'Voxels': [''],
+                   '-log10(p)' : [''],
+                   'COPE-MEAN' : ['']}
+            cz1_final = pd.DataFrame(z1)
         
         try:
             cz2 = pd.read_csv(feat_output_dir+'cluster_zstat2.txt', sep='\t', usecols=['Voxels', '-log10(P)', 'Z-MAX', 'COPE-MEAN'])
@@ -723,9 +737,15 @@ for typ in ['block']:
         except FileNotFoundError:
             warnings['ID'].append(df.ID[i] + '_' + df.Date[i])
             warnings['warning'].append('No cluster_zstat2.txt')
-            add = False
             if verb:
                 print('No cluster_zstat2.txt', df.ID[i], '_', df.Date[i])
+
+            z2 = { 'ID' : [df.ID[i]+'_'+df.Date[i]],
+                   'type' : [key],
+                   'Voxels': [''],
+                   '-log10(p)' : [''],
+                   'COPE-MEAN' : ['']}
+            cz2_final = pd.DataFrame(z2)
         
         build = cz1_final.merge(cz2_final, on=['ID', 'type'], suffixes=('_O2', '_CO2'))
         
@@ -743,9 +763,13 @@ for typ in ['block']:
         except FileNotFoundError:
             warnings['ID'].append(df.ID[i] + '_' + df.Date[i])
             warnings['warning'].append('No O2 activation found')
-            add = False
             if verb:
                 print('No O2 activation found for', df.ID[i] + '_' + df.Date[i])
+            
+            fq1 = pd.DataFrame({'ID' : [df.ID[i]+'_'+df.Date[i]],
+                                'type' : [key],
+                                'fq_mean' : ['']})
+            build = build.merge(fq1, on=['ID', 'type'], suffixes=('_O2', '_CO2'))
         
             
         CO2 = feat_output_dir+'fq_CO2/'
@@ -759,9 +783,13 @@ for typ in ['block']:
         except FileNotFoundError:
             warnings['ID'].append(df.ID[i] + '_' + df.Date[i])
             warnings['warning'].append('No CO2 activation found')
-            add = False
             if verb:
                 print('No CO2 activation found for', df.ID[i] + '_' + df.Date[i])
+            
+            fq2 = pd.DataFrame({'ID' : [df.ID[i]+'_'+df.Date[i]],
+                                'type' : [key],
+                                'fq_mean' : ['']})
+            build = build.merge(fq2, on=['ID', 'type'], suffixes=('_O2', '_CO2'))
         
         build['O2_shift'] = df.O2_shift[i]
         build['CO2_shift'] = df.CO2_shift[i]
@@ -781,7 +809,7 @@ for typ in ['block']:
         build['O2_f_p'] = df.O2_f_p[i]
         build['CO2_f_p'] = df.CO2_f_p[i]
         build['comb_f_p'] = df.comb_f_p[i]
-
+#        print(build)
 
 # Categories based on previous declarations
 #ET_dict = {'ETO2' : [], 'ETCO2' : [], 'ET_exists' : [],
@@ -813,8 +841,8 @@ for typ in ['block']:
 #                              'data_exists' : [df.data_exists[i]]
 #                              })
         
-        if add:
-            stats_df = pd.concat([stats_df, build])
+#        if add:
+        stats_df = pd.concat([stats_df, build])
     
     if verb:
         print()
@@ -822,6 +850,7 @@ for typ in ['block']:
     stats_df.reset_index(drop=True)
 
 warnings_df = pd.DataFrame(warnings).sort_values('ID')
+#print(stats_df)
 stats_df = stats_df.sort_values('ID')
 
 f = plt.figure()

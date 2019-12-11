@@ -14,7 +14,7 @@ import multiprocessing
 import fnmatch
 import analysis
 import numpy as np
-
+import json
 
 # set limit for number of processes that can be run at once
 cores = multiprocessing.cpu_count()
@@ -24,21 +24,19 @@ warnings = {'ID' : [],
             'warning' : []}
 
 # grab the processed BOLD data, O2 contrast, and CO2 contrast
-bold_dir = '/media/ke/8tb_part2/FSL_work/all_info_sub/'
+bold_dir = '/media/ke/8tb_part2/FSL_work/all_info/'
 meants_dir = '/home/ke/Desktop/all_meants/'
-shifted_dir = '/home/ke/Desktop/shifted_export/'
+shifted_dir = '/home/ke/Desktop/Matlab_output/'
 
-# all grab all the .txt files in the bold folder
-bold_files = []
-for folder in os.listdir(bold_dir):
-    for file in os.listdir(bold_dir+folder+'/BOLD/'):
-        if fnmatch.fnmatch(file, '*.nii'):
-            bold_files.append(folder+'/BOLD/'+file)    
-bold_files.sort()
-print(len(bold_files))
-meants_files = [file for file in os.listdir(meants_dir) if file.upper().endswith('.TXT')]
-meants_files.sort()
-print(len(meants_files))
+# load design template
+verb = True
+key = ''
+over = True
+
+# grab all the contrast data
+files = [file.split('_')[0]+'_'+file.split('_')[1] for file in os.listdir(shifted_dir) if file.upper().endswith('_O2.TXT')]
+files.sort()
+print(len(files))
 O2_files = [file for file in os.listdir(shifted_dir) if file.upper().endswith('_O2.TXT')]
 O2_files.sort()
 print(len(O2_files))
@@ -46,26 +44,93 @@ CO2_files = [file for file in os.listdir(shifted_dir) if file.upper().endswith('
 CO2_files.sort()
 print(len(CO2_files))
 
+# all grab all the .txt files in the bold folder
+bold_files = []
+for folder in os.listdir(bold_dir): 
+    identify = folder.split('_')
+    ID = identify[0] + '_' + identify[2]
+    if ID not in files or not os.path.exists(bold_dir+folder+'/BOLD/'):
+        identify = folder.split('_')
+        warnings['ID'].append(ID)
+        warnings['warning'].append('No BOLD folder')
+        continue
+    for file in os.listdir(bold_dir+folder+'/BOLD/'):
+        if fnmatch.fnmatch(file, '*.nii'):
+            bold_files.append(folder+'/BOLD/'+file)    
+bold_files.sort()
+print(len(bold_files))
+
+meants_files = []
+tr = []
+for file in bold_files:
+    #construct the processed nifti directory
+    processed_dir = bold_dir+file.split('/')[0] +'/BOLD_processed/'
+    
+    if(not os.path.exists(processed_dir)):
+        os.mkdir(processed_dir)
+    
+    b_temp = bold_dir + file
+    try:
+        with open(b_temp[:-4]+'.json', 'r') as j_file:
+            data = json.load(j_file)
+            rep_time = data['RepetitionTime']
+            eff_tr = rep_time * 2 if rep_time < 1.5 else rep_time
+            tr.append(eff_tr)
+    except:
+        print('\t\t'+file+' has a bad json file. Cannot read')
+        
+    #run slicetimer to correct for slice timing
+    time_temp =  processed_dir+b_temp[b_temp.rfind('/')+1:-4]+'_timed.nii'
+    if(not os.path.exists(time_temp+'.gz')):
+        if verb:
+            print('\t\tNo slice timing correction. Creating timing correction')
+        subprocess.run(['slicetimer', '-i', b_temp, '-o', time_temp, '--odd'])
+    #print('\n', cor_temp, '\n')
+
+    # optional (motion correction)
+    cor_temp = time_temp[:-4]+'_demotioned.nii'
+    if(not os.path.exists(cor_temp+'.gz')):
+        if verb:
+            print('\t\tNo motion correction. Creating motion correction')
+        subprocess.run(['mcflirt', '-in', time_temp, '-out', cor_temp])
+
+    # extract the brain using BET
+    brain_path = cor_temp[:-4]+'_brain.nii'
+    if(not os.path.exists(brain_path+'.gz')):
+        if verb:
+            print('\t\tNo BET. Creating BET')
+        subprocess.run(['bet', cor_temp, brain_path, '-F'])
+
+    # get meants from BET
+    meants_path = processed_dir+'meants.txt'
+    if(not os.path.exists(meants_path)):
+        if verb:
+            print('\t\tNo meants. Creating meants')
+        subprocess.run(['fslmeants', '-i', brain_path, '-o', meants_path])
+    
+#    print(meants_path)
+    meants_files.append(meants_path)
+
+df = pd.DataFrame({'meants' : meants_files,
+                   'tr' : tr})
+df = df.sort_values('meants')
+print(len(df))
+#input('Press enter to continue')
+
 feat_dir = '/home/ke/Desktop/feat/'
 T1_dir = '/home/ke/Desktop/all_T1/'
 
-# load design template
-verb = True
-key = ''
-over = False
-
 with open(feat_dir+'design_files/template', 'r') as template:
     stringTemp = template.read()
-    for i in range(len(meants_files)):
-        meants_path = meants_dir+meants_files[i]
-        meants_df = pd.read_csv(meants_path, names=['Time', 'BOLD'])
-        tr = meants_df.Time[1]
-        identify = meants_files[i].split('_')
+    for i in range(len(df)):
+        meants_path = df['meants'][i]
+        meants = np.loadtxt(meants_path, delimiter='\n')[3:]
+        tr = df['tr'][1]
+        identify = meants_path.split('/')[-3].split('_')
         sub_id = identify[0]
-        date = identify[1]
+        date = identify[2]
         p_id = sub_id+'_'+date
         key = ''
-        
         output_dir = feat_dir+p_id
         T1_file = [T1_dir+file for file in os.listdir(T1_dir) if fnmatch.fnmatch(file, sub_id+'_'+date+'*_T1.nii*')]
         
@@ -90,14 +155,15 @@ with open(feat_dir+'design_files/template', 'r') as template:
         to_write = stringTemp[:]
        # print(to_write)
         to_write = to_write.replace("%%OUTPUT_DIR%%",'"'+output_dir+'"')
-        to_write = to_write.replace("%%VOLUMES%%",'"'+str(len(meants_df)+3)+'"')
+        to_write = to_write.replace("%%VOLUMES%%",'"'+str(len(meants)+3)+'"')
         to_write = to_write.replace("%%TR%%",'"'+str(tr)+'"')
-        to_write = to_write.replace("%%BOLD_FILE%%",'"'+bold_dir+bold_files[i]+'.nii"')
+        to_write = to_write.replace("%%BOLD_FILE%%",'"'+bold_dir+bold_files[i]+'"')
         to_write = to_write.replace("%%FS_T1%%",'"'+T1_file+'"')
         to_write = to_write.replace("%%O2_CONTRAST%%",'"'+shifted_dir+O2_files[i]+'"')
         to_write = to_write.replace("%%CO2_CONTRAST%%",'"'+shifted_dir+CO2_files[i]+'"')
 
         ds_path = feat_dir+'design_files/'+p_id+'.fsf'
+        
         with open(ds_path, 'w+') as outFile:
             outFile.write(to_write)
 
@@ -167,7 +233,6 @@ for i in range(len(bold_files)):
     sub_id = identify[0]
     date = identify[2].split('/')[0]
     p_id = sub_id+'_'+date
-    add = True
     key = ''
     feat_output_dir = feat_dir+p_id+'.feat/'
 #        output_dir = '/media/ke/8tb_part2/FSL_work/feat/both_shift/'+key+df.ID[i]+'_'+df.Date[i]
@@ -190,9 +255,14 @@ for i in range(len(bold_files)):
     except FileNotFoundError:
         warnings['ID'].append(p_id)
         warnings['warning'].append('No cluster_zstat1.txt')
-        add = False
         if verb:
             print('No cluster_zstat1.txt', p_id)
+
+        z1 = { 'ID' : [p_id],
+               'Voxels': [''],
+               '-log10(p)' : [''],
+               'COPE-MEAN' : ['']}
+        cz1_final = pd.DataFrame(z1)
 
     try:
         cz2 = pd.read_csv(feat_output_dir+'cluster_zstat2.txt', sep='\t', usecols=['Voxels', '-log10(P)', 'Z-MAX', 'COPE-MEAN'])
@@ -211,9 +281,14 @@ for i in range(len(bold_files)):
     except FileNotFoundError:
         warnings['ID'].append(p_id)
         warnings['warning'].append('No cluster_zstat2.txt')
-        add = False
         if verb:
             print('No cluster_zstat2.txt', p_id)
+
+        z2 = { 'ID' : [p_id],
+               'Voxels': [''],
+               '-log10(p)' : [''],
+               'COPE-MEAN' : ['']}
+        cz2_final = pd.DataFrame(z2)
 
     build = cz1_final.merge(cz2_final, on=['ID'], suffixes=('_O2', '_CO2'))
 
@@ -230,9 +305,12 @@ for i in range(len(bold_files)):
     except FileNotFoundError:
         warnings['ID'].append(p_id)
         warnings['warning'].append('No O2 activation found')
-        add = False
         if verb:
             print('No O2 activation found for', p_id, 'O2')
+            
+        fq1 = pd.DataFrame({'ID' : [p_id],
+                            'fq_mean' : ['']})
+        build = build.merge(fq1, on=['ID', 'type'], suffixes=('_O2', '_CO2'))
 
 
     CO2 = feat_output_dir+'fq_CO2/'
@@ -245,12 +323,14 @@ for i in range(len(bold_files)):
     except FileNotFoundError:
         warnings['ID'].append(p_id)
         warnings['warning'].append('No CO2 activation found')
-        add = False
         if verb:
             print('No CO2 activation found for', p_id, 'CO2')
+            
+        fq2 = pd.DataFrame({'ID' : [p_id],
+                            'fq_mean' : ['']})
+        build = build.merge(fq2, on=['ID', 'type'], suffixes=('_O2', '_CO2'))
     
-    if add:
-        stats_df = pd.concat([stats_df, build])
+    stats_df = pd.concat([stats_df, build])
 
 #     build['O2_shift'] = df.O2_shift[i]
 #     build['CO2_shift'] = df.CO2_shift[i]
