@@ -26,7 +26,7 @@ warnings = {'ID' : [],
 # grab the processed BOLD data, O2 contrast, and CO2 contrast
 bold_dir = '/media/ke/8tb_part2/FSL_work/all_info/'
 meants_dir = '/home/ke/Desktop/all_meants/'
-shifted_dir = '/home/ke/Desktop/Matlab_output/'
+shifted_dir = '/home/ke/Desktop/Matlab_output_all/'
 
 # load design template
 verb = True
@@ -34,13 +34,13 @@ key = ''
 over = True
 
 # grab all the contrast data
-files = [file.split('_')[0]+'_'+file.split('_')[1] for file in os.listdir(shifted_dir) if file.upper().endswith('_O2.TXT')]
+files = [file.split('_')[0]+'_'+file.split('_')[1] for file in os.listdir(shifted_dir) if file.upper().endswith('_LOWER_CO2_EX.TXT')]
 files.sort()
 print(len(files))
-O2_files = [file for file in os.listdir(shifted_dir) if file.upper().endswith('_O2.TXT')]
+O2_files = [file for file in os.listdir(shifted_dir) if file.upper().endswith('_UPPER_O2_EX.TXT')]
 O2_files.sort()
 print(len(O2_files))
-CO2_files = [file for file in os.listdir(shifted_dir) if file.upper().endswith('_CO2.TXT')]
+CO2_files = [file for file in os.listdir(shifted_dir) if file.upper().endswith('_LOWER_CO2_EX.TXT')]
 CO2_files.sort()
 print(len(CO2_files))
 
@@ -49,8 +49,11 @@ bold_files = []
 for folder in os.listdir(bold_dir): 
     identify = folder.split('_')
     ID = identify[0] + '_' + identify[2]
-    if ID not in files or not os.path.exists(bold_dir+folder+'/BOLD/'):
-        identify = folder.split('_')
+    if ID not in files :
+        warnings['ID'].append(ID)
+        warnings['warning'].append('No gas files')
+        continue
+    if not os.path.exists(bold_dir+folder+'/BOLD/'):
         warnings['ID'].append(ID)
         warnings['warning'].append('No BOLD folder')
         continue
@@ -114,7 +117,10 @@ for file in bold_files:
 df = pd.DataFrame({'meants' : meants_files,
                    'tr' : tr})
 df = df.sort_values('meants')
+
 print(len(df))
+#for i in range(len(df)):
+#    print(df['meants'][i])
 #input('Press enter to continue')
 
 feat_dir = '/home/ke/Desktop/feat/'
@@ -125,7 +131,7 @@ with open(feat_dir+'design_files/template', 'r') as template:
     for i in range(len(df)):
         meants_path = df['meants'][i]
         meants = np.loadtxt(meants_path, delimiter='\n')[3:]
-        tr = df['tr'][1]
+        tr = df['tr'][i]
         identify = meants_path.split('/')[-3].split('_')
         sub_id = identify[0]
         date = identify[2]
@@ -310,7 +316,7 @@ for i in range(len(bold_files)):
             
         fq1 = pd.DataFrame({'ID' : [p_id],
                             'fq_mean' : ['']})
-        build = build.merge(fq1, on=['ID', 'type'], suffixes=('_O2', '_CO2'))
+        build = build.merge(fq1, on=['ID'], suffixes=('_O2', '_CO2'))
 
 
     CO2 = feat_output_dir+'fq_CO2/'
@@ -328,7 +334,7 @@ for i in range(len(bold_files)):
             
         fq2 = pd.DataFrame({'ID' : [p_id],
                             'fq_mean' : ['']})
-        build = build.merge(fq2, on=['ID', 'type'], suffixes=('_O2', '_CO2'))
+        build = build.merge(fq2, on=['ID'], suffixes=('_O2', '_CO2'))
     
     stats_df = pd.concat([stats_df, build])
 
@@ -340,6 +346,6 @@ for i in range(len(bold_files)):
 #     build['p_value'] = df.p_value[i]
             
 warnings_df = pd.DataFrame(warnings).sort_values('ID')
-with pd.ExcelWriter(shifted_dir+'stats_data.xlsx') as writer:  # doctest: +SKIP
+with pd.ExcelWriter(shifted_dir+'inverse_ex_data.xlsx') as writer:  # doctest: +SKIP
     stats_df.to_excel(writer, sheet_name='Stats', index=False)
     warnings_df.to_excel(writer, sheet_name='Warnings', index=False)

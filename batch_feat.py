@@ -97,7 +97,8 @@ for f in txt_files:
     if len(file) != 4:
         print('Please check filename')
         continue
-    p_id = file[0].upper() + file[1]
+#    p_id = file[0].upper() + file[1]
+    p_id = file[0].upper()
     p_dic['ID'].append(p_id)
     p_dic['Date'].append(file[2])
     p_dic['EndTidal_Path'].append(path+f)
@@ -252,6 +253,8 @@ for b_path in p_df.BOLD_path:
         warnings['ID'].append(p_id[0]+'_'+p_id[2])
         warnings['warning'].append('Has a bad json file. Cannot read')
 #exit()
+#print(p_df)
+#print(tr_dict)
 p_df = p_df.merge(pd.DataFrame(tr_dict), on=['ID', 'Date'])
 
 #get number of volumes
@@ -378,9 +381,10 @@ for typ in ['block']:
                                   'Data' : meants})
         
         # save the bold df if necessary
-#        save_meants = '/home/ke/Desktop/all_meants/'
+        save_meants = '/home/ke/Desktop/all_meants/'
 #        meants_df.to_csv(save_meants+id+'_'+date+f_path[-10:-4]+'.txt', index=False, header=False)
-#        meants_df.to_excel(save_meants+id+'_'+date+f_path[-10:-4]+'.xlsx', index=False, header=False)
+        meants_df.to_excel(save_meants+id+'_'+date+f_path[-10:-4]+'.xlsx', index=False, header=False)
+        exit()
 #        continue
     
         #generate cleaned data paths
