@@ -8,7 +8,6 @@ import subprocess
 import argparse
 import pandas as pd
 import numpy as np
-import analysis
 import json
 from scipy import signal
 import time
@@ -17,8 +16,13 @@ import multiprocessing
 import matplotlib.pyplot as plt
 import seaborn as sns
 import scipy.stats as st
-import scipy.interpolate as interp
 import fnmatch
+
+import stat_utils
+import fft_analysis
+import peak_analysis
+import shifter
+import parallel_processing
 
 # instantiate the argument parser
 parser = argparse.ArgumentParser()
@@ -91,17 +95,32 @@ if verb:
 #separate patient ID and scan date and pack into dictionary
 p_dic = {'ID' : [],
          'Date' : [],
-         'EndTidal_Path' : []}
+         'EndTidal_Path' : [],
+         'Notes' : []}
 for f in txt_files:
+    op = None
+    ed = None
+    notes = 'O2+CO2'
+    
+    for i in range(len(f)):
+        if f[i] == '(':
+            op = i
+        if f[i] == ')':
+            ed = i
+            break
+    
+    if ed:
+        f = f[:op] + f[ed+1:]
+        notes = f[op:ed]
+        
     file = f.split('_')
-    if len(file) != 4:
-        print('Please check filename')
-        continue
 #    p_id = file[0].upper() + file[1]
     p_id = file[0].upper()
     p_dic['ID'].append(p_id)
     p_dic['Date'].append(file[2])
     p_dic['EndTidal_Path'].append(path+f)
+    p_dic['Notes'].append(notes)
+    
 
 p_df = pd.DataFrame(p_dic)
 
@@ -448,29 +467,29 @@ for typ in ['block']:
                 print('Starting fourier for', id + '_' + date)
             # get fourier cleaned data
             # 1/60 because all gas challanges occur slower than at a rate of 1 per minute
-            pre_O2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.O2, 1/60, tr, time_pts, trim=True)
-            pre_CO2 = analysis.fft_analysis().fourier_filter(endTidal.Time, endTidal.CO2, 1/60, tr, time_pts, trim=True)
+            pre_O2 = fft_analysis.fourier_filter(endTidal.Time, endTidal.O2, 1/60, tr, time_pts, trim=True)
+            pre_CO2 = fft_analysis.fourier_filter(endTidal.Time, endTidal.CO2, 1/60, tr, time_pts, trim=True)
 
         elif block:
             if verb:
                 print('Starting block for', id + '_' + date)
-            pre_O2 = analysis.peak_analysis().block_signal(endTidal.Time, endTidal.O2.apply(lambda x:x*-1), tr, invert)
+            pre_O2 = peak_analysis.envelope(endTidal.Time, endTidal.O2.apply(lambda x:x*-1), tr, invert)
             pre_O2.Data *= -1
-            pre_CO2 = analysis.peak_analysis().block_signal(endTidal.Time, endTidal.CO2, tr, invert)
+            pre_CO2 = peak_analysis.envelope(endTidal.Time, endTidal.CO2, tr, invert)
 
         elif trough:
             if verb:
                 print('Starting troughs for', id + '_' + date)
-            pre_CO2, pre_O2 = analysis.peak_analysis().peak_four(endTidal, verb, f_path, tr, time_pts, trough=True)
+            pre_CO2, pre_O2 = peak_analysis.peak_four(endTidal, verb, f_path, tr, time_pts, trough=True)
         
         elif man:
             if verb:
                 print('Starting manual for ', id + '_' + date)
-            pre_CO2, pre_O2 = analysis.peak_analysis().peak(endTidal, verb, f_path, time_pts)
+            pre_CO2, pre_O2 = peak_analysis.peak(endTidal, verb, f_path, time_pts)
         else:
             if verb:
                 print('Starting peaks for', id + '_' + date)
-            pre_CO2, pre_O2 = analysis.peak_analysis().peak_four(endTidal, verb, f_path, tr, time_pts, trough=False)
+            pre_CO2, pre_O2 = peak_analysis.peak_four(endTidal, verb, f_path, tr, time_pts, trough=False)
 
         
 #        plt.plot(pre_O2.Data)
@@ -482,7 +501,7 @@ for typ in ['block']:
         if verb:
             print('Shifting O2')
         # get O2 shift   
-        full_O2, processed_O2, O2_corr, O2_shift, O2_start = analysis.shifter().corr_align(meants, pre_O2.Time, pre_O2.Data, scan_time, time_pts, None, invert) # no ref_shift need for O2
+        full_O2, processed_O2, O2_corr, O2_shift, O2_start = shifter.corr_align(meants, pre_O2.Time, pre_O2.Data, scan_time, time_pts, None, invert) # no ref_shift need for O2
 #        plt.plot(O2_corr)
 #        plt.show()
 #        plt.plot(processed_O2)
@@ -493,7 +512,7 @@ for typ in ['block']:
         if verb:
             print('Shifting CO2')
         # get CO2 shift
-        full_CO2, processed_CO2, CO2_corr, CO2_shift, CO2_start = analysis.shifter().corr_align(meants, pre_CO2.Time, pre_CO2.Data, scan_time, time_pts, O2_start, invert) # use O2 shift as ref for CO2 shift
+        full_CO2, processed_CO2, CO2_corr, CO2_shift, CO2_start = shifter.corr_align(meants, pre_CO2.Time, pre_CO2.Data, scan_time, time_pts, O2_start, invert) # use O2 shift as ref for CO2 shift
 #        plt.plot(CO2_corr)
 #        plt.show()
 #        plt.plot(processed_CO2)
@@ -503,12 +522,12 @@ for typ in ['block']:
         if verb:
             print('Combining O2 and CO2')
         # combine the shfited O2 and CO2 and get the combined r and p values
-        coeff, comb_r, comb_p = analysis.stat_utils().get_info([processed_O2, processed_CO2], meants)        
+        coeff, comb_r, comb_p = stat_utils.get_info([processed_O2, processed_CO2], meants)        
         combined = coeff[0] * processed_O2 + coeff[1] * processed_CO2 + coeff[2]
         if verb:
             print('Shifting Combination')
         # get the shift for the combination
-        full_comb, processed_comb, comb_corr, comb_shift, comb_start = analysis.shifter().corr_align(meants, time_pts, combined, scan_time, time_pts, None, invert)
+        full_comb, processed_comb, comb_corr, comb_shift, comb_start = shifter.corr_align(meants, time_pts, combined, scan_time, time_pts, None, invert)
         # add the combined shift to O2 and CO2 shifts
         O2_f_shift = O2_shift + comb_shift
         CO2_f_shift = CO2_shift + comb_shift
@@ -516,8 +535,8 @@ for typ in ['block']:
         if verb:
             print('Interperolating original O2 and CO2 based on final shift')
         # interpolate the filtered O2 and CO2 data to fit the new time shifts      
-        processed_O2_f = analysis.stat_utils().resamp(pre_O2.Time + O2_f_shift, time_pts, pre_O2.Data, O2_f_shift, O2_start+comb_start)
-        processed_CO2_f = analysis.stat_utils().resamp(pre_CO2.Time + CO2_f_shift, time_pts, pre_CO2.Data, CO2_f_shift, CO2_start+comb_start)
+        processed_O2_f = stat_utils.resamp(pre_O2.Time + O2_f_shift, time_pts, pre_O2.Data, O2_f_shift, O2_start+comb_start)
+        processed_CO2_f = stat_utils.resamp(pre_CO2.Time + CO2_f_shift, time_pts, pre_CO2.Data, CO2_f_shift, CO2_start+comb_start)
         
         # get final O2 r and p values
         O2_f_r, O2_f_p = st.pearsonr(processed_O2_f, meants)
@@ -525,7 +544,7 @@ for typ in ['block']:
         CO2_f_r, CO2_f_p = st.pearsonr(processed_CO2_f, meants)
     
         # get the combine the final shift signals and get their r and p values
-        coeff_f, comb_f_r, comb_f_p = analysis.stat_utils().get_info([processed_O2_f, processed_CO2_f], meants)
+        coeff_f, comb_f_r, comb_f_p = stat_utils.get_info([processed_O2_f, processed_CO2_f], meants)
         
 #        processed_O2_f, extend_time = analysis.stat_utils().resamp_f(pre_O2.Time + O2_f_shift, time_pts, pre_O2.Data, O2_f_shift, O2_start+comb_start, tr)
 #        processed_CO2_f, extend_time = analysis.stat_utils().resamp_f(pre_CO2.Time + CO2_f_shift, time_pts, pre_CO2.Data, CO2_f_shift, CO2_start+comb_start, tr)
@@ -569,14 +588,14 @@ for typ in ['block']:
             np.savetxt(save_CO2, processed_CO2_f, delimiter='\t')
     
 #            # save and create plots (shifts)
-#            analysis.stat_utils().save_plots_comb_extend(df=endTidal, O2=pre_O2, O2_m=full_O2, O2_f=processed_O2_f, O2_corr=O2_corr,
-#                                                         CO2=pre_CO2, CO2_m=full_CO2, CO2_f=processed_CO2_f, CO2_corr=CO2_corr, meants=meants,
-#                                                         coeff=coeff, coeff_f=coeff_f, comb_corr=comb_corr, extend_time=extend_time,
-#                                                         f_path=f_path, key=key, verb=verb, time_points=time_pts, disp=disp)
-            analysis.stat_utils().save_plots_comb(df=endTidal, O2=pre_O2, O2_m=full_O2, O2_f=processed_O2_f, O2_corr=O2_corr,
-                                                         CO2=pre_CO2, CO2_m=full_CO2, CO2_f=processed_CO2_f, CO2_corr=CO2_corr, meants=meants,
-                                                         coeff=coeff, coeff_f=coeff_f, comb_corr=comb_corr,
-                                                         f_path=f_path, key=key, verb=verb, time_points=time_pts, disp=disp)
+#            stat_utils.save_plots_comb_extend(df=endTidal, O2=pre_O2, O2_m=full_O2, O2_f=processed_O2_f, O2_corr=O2_corr,
+#                                               CO2=pre_CO2, CO2_m=full_CO2, CO2_f=processed_CO2_f, CO2_corr=CO2_corr, meants=meants,
+#                                               coeff=coeff, coeff_f=coeff_f, comb_corr=comb_corr, extend_time=extend_time,
+#                                               f_path=f_path, key=key, verb=verb, time_points=time_pts, disp=disp)
+            stat_utils.save_plots_comb(df=endTidal, O2=pre_O2, O2_m=full_O2, O2_f=processed_O2_f, O2_corr=O2_corr,
+                                       CO2=pre_CO2, CO2_m=full_CO2, CO2_f=processed_CO2_f, CO2_corr=CO2_corr, meants=meants,
+                                       coeff=coeff, coeff_f=coeff_f, comb_corr=comb_corr,
+                                       f_path=f_path, key=key, verb=verb, time_points=time_pts, disp=disp)
     
     if verb:
         print()
@@ -639,14 +658,14 @@ for typ in ['block']:
             with open(ds_path, 'w+') as outFile:
                 outFile.write(to_write)
                         
-            index = analysis.parallel_processing().get_next_avail(processes, verb, limit, key, 'FEAT')
+            index = parallel_processing.get_next_avail(processes, verb, limit, key, 'FEAT')
             
             if verb:
                 print('Starting FEAT')
             processes[index] = subprocess.Popen(['feat', ds_path])
             time.sleep(0.5)
         
-        analysis.parallel_processing().wait_remaining(processes, verb, key, 'FEAT')
+        parallel_processing.wait_remaining(processes, verb, key, 'FEAT')
         
     # run featquery
     for i in range(len(df)):
@@ -657,7 +676,7 @@ for typ in ['block']:
         O2_mask_dir_path = feat_output_dir+'cluster_mask_zstat1.nii.gz'
         CO2_mask_dir_path = feat_output_dir+'cluster_mask_zstat2.nii.gz'
                     
-        index = analysis.parallel_processing().get_next_avail(processes, verb, limit, key, 'featquery')
+        index = parallel_processing.get_next_avail(processes, verb, limit, key, 'featquery')
         
         if os.path.exists(feat_output_dir+'fq_O2'):
             if verb:
@@ -671,7 +690,7 @@ for typ in ['block']:
                 print('Starting O2 featquery for', p_id)
             processes[index] = subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope1', 'fq_O2', '-p', '-s', O2_mask_dir_path])
         
-        index = analysis.parallel_processing().get_next_avail(processes, verb, limit, key, 'featquery')
+        index = parallel_processing.get_next_avail(processes, verb, limit, key, 'featquery')
         
         if os.path.exists(feat_output_dir+'fq_CO2'):
             if verb:
@@ -686,7 +705,7 @@ for typ in ['block']:
             processes[index] = subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope2', 'fq_CO2', '-p', '-s', CO2_mask_dir_path])
     
 
-    analysis.parallel_processing().wait_remaining(processes, verb, key, 'featquery')
+    parallel_processing.wait_remaining(processes, verb, key, 'featquery')
         
     # get the stats
     for i in range(len(df)):        
