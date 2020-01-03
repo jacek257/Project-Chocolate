@@ -39,7 +39,7 @@ def kill_unending(processes, verb):
     
     return
 
-def get_next_avail(processes, verb, limit, key, s_name):
+def get_next_avail(processes, verb, limit=5, key, s_name):
     '''
     Managues the queue for processes
     

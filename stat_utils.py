@@ -214,8 +214,8 @@ def save_plots_CO2(df, CO2, CO2_m, CO2_f, CO2_corr, meants,
     f, axes = plt.subplots(2, 2)
     f.suptitle(f_path[:-4].split('/')[-1])
     
-    CO2_norm = CO2.Data / CO2.Data.std()
-    CO2_m_norm = CO2_m.Data / CO2_m.Data.std()
+    CO2_norm = (CO2.Data - CO2.Data.mean()) / CO2.Data.std()
+    CO2_m_norm = (CO2_m.Data - CO2_m.Data.mean()) / CO2_m.Data.std()
     
     sns.lineplot(x='Time', y='CO2', data=df, color='b', ax=axes[0, 0])
     sns.lineplot(x='Time', y='Data', data=CO2, color='r', ax=axes[0, 0])

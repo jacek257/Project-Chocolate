@@ -169,8 +169,17 @@ def get_wlen(sig_time, sig):
 
     freq,_,disp = fft_analysis.fourier_trans(sig_time, sig, len(sig))
     window_it = np.argmax(disp[25:500])+25
+#    plt.close()
+#    sns.lineplot(data=disp[:500])
+#    plt.show()
+#    plt.close()
     freq_val = freq[window_it] # this is the most prominent frequency
+#    print(freq_val)
     window_mag = 1/freq_val
+#    print(window_mag)
+    if window_mag > 10:
+        window_mag /= 2
+#    print(window_mag)
 
     window_length = 0
     for i, t in enumerate(sig_time):
@@ -205,11 +214,11 @@ def envelope(sig_time, sig, tr, invert):
         count += 1
     if invert:
         cpy *= -1
-    plt.close()
-    sns.lineplot(x=sig_time, y=sig)
-    sns.lineplot(x=sig_time, y=cpy, color='r')
-    plt.show()
-    plt.close()
+#    plt.close()
+#    sns.lineplot(x=sig_time, y=sig)
+#    sns.lineplot(x=sig_time, y=cpy, color='r')
+#    plt.show()
+#    plt.close()
     
     # get the sampling freq
     fs = len(cpy)/np.max(sig_time)
@@ -221,9 +230,9 @@ def envelope(sig_time, sig, tr, invert):
     filtered = sg.filtfilt(b, a, cpy)
     signal_resampled = stat_utils.resamp(sig_time, time_pts, filtered, 0, 0)
 
-    sns.lineplot(x=sig_time, y=sig)
-    sns.lineplot(x=time_pts, y=signal_resampled, color='r')
-    plt.show()
-    plt.close()
+#    sns.lineplot(x=sig_time, y=sig)
+#    sns.lineplot(x=time_pts, y=signal_resampled, color='r')
+#    plt.show()
+#    plt.close()
     return pd.DataFrame({'Time' : time_pts,
                          'Data' : signal_resampled})

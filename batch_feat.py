@@ -328,7 +328,7 @@ for typ in ['block']:
     elif trough:
         key = 't_'
     elif block:
-        key = 'b_'
+        key = 'b5_'
     elif man:
         key = 'm'
     else:
@@ -401,7 +401,7 @@ for typ in ['block']:
         
         # save the bold df if necessary
         save_meants = '/home/ke/Desktop/all_meants/'
-#        meants_df.to_csv(save_meants+id+'_'+date+f_path[-10:-4]+'.txt', index=False, header=False)
+        meants_df.to_csv(save_meants+id+'_'+date+f_path[-10:-4]+'.txt', index=False, header=False)
         meants_df.to_excel(save_meants+id+'_'+date+f_path[-10:-4]+'.xlsx', index=False, header=False)
 #        continue
         
@@ -650,6 +650,8 @@ for typ in ['block']:
     df = df.reset_index(drop=True)
     
     #    print("df head----------------\n",p_df.head())
+    
+#    exit()
     
     if verb:
         print('\n\nStarting to run feat')

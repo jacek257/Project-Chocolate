@@ -42,9 +42,10 @@ def get_cross_correlation(base, sig, scan_time, ref_shift, invert):
 #            plt.show()
         shift_index = np.argmax(lim_corr) - (len(lim_corr)//2) + ref_shift
     else:
-#            plt.plot(correlation_series)
-#            plt.show()
-        shift_index = np.argmax(correlation_series) - (len(correlation_series)//2)
+        limit = int(10 * len(base)/scan_time)
+        lim_corr = correlation_series[len(correlation_series)//2-limit : len(correlation_series)//2+limit+1]
+        shift_index = np.argmax(lim_corr) - (len(lim_corr)//2)
+#        shift_index = np.argmax(correlation_series) - (len(correlation_series)//2)
     shift_value = scan_time/len(base) * shift_index
         
     return shift_value, shift_index, correlation_series
