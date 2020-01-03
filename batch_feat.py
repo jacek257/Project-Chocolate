@@ -694,7 +694,7 @@ for typ in ['block']:
                 with open(ds_path, 'w+') as outFile:
                     outFile.write(to_write)
                             
-                index = parallel_processing.get_next_avail(processes, verb, limit, key, 'FEAT')
+                index = parallel_processing.get_next_avail(processes, verb, key, 'FEAT', limit)
                 
                 if verb:
                     print('Starting FEAT')
@@ -727,7 +727,7 @@ for typ in ['block']:
                 with open(ds_path, 'w+') as outFile:
                     outFile.write(to_write)
                             
-                index = parallel_processing.get_next_avail(processes, verb, limit, key, 'FEAT')
+                index = parallel_processing.get_next_avail(processes, verb, key, 'FEAT', limit)
                 
                 if verb:
                     print('Starting FEAT')
@@ -745,7 +745,7 @@ for typ in ['block']:
         CO2_mask_dir_path = feat_output_dir+'cluster_mask_zstat1.nii.gz'
         O2_mask_dir_path = feat_output_dir+'cluster_mask_zstat2.nii.gz'
                     
-        index = parallel_processing.get_next_avail(processes, verb, limit, key, 'featquery')
+        index = parallel_processing.get_next_avail(processes, verb, key, 'featquery', limit)
         
         if os.path.exists(feat_output_dir+'fq_CO2'):
             if verb:
@@ -759,7 +759,7 @@ for typ in ['block']:
                 print('Starting CO2 featquery for', p_id)
             processes[index] = subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope1', 'fq_CO2', '-p', '-s', CO2_mask_dir_path])
         
-        index = parallel_processing.get_next_avail(processes, verb, limit, key, 'featquery')
+        index = parallel_processing.get_next_avail(processes, verb, key, 'featquery', limit)
         
         if os.path.exists(feat_output_dir+'fq_O2'):
             if verb:
