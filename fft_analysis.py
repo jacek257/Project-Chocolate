@@ -13,7 +13,7 @@ import scipy.interpolate as interp
 import pandas as pd
 import stat_utils
 
-def fourier_trans(self, time_series, data, N):
+def fourier_trans(time_series, data, N):
     """
     Apply a fourier transformation on the data
     
@@ -37,7 +37,7 @@ def fourier_trans(self, time_series, data, N):
     return (freq_dom,power_spectra,plottable_spectra)
 
 
-def my_filter(self, f_cut, freq_dom, power_spectra):
+def my_filter(f_cut, freq_dom, power_spectra):
     """
     Apply a butterworth low-pass filter on the fourier transformed data
     
@@ -67,7 +67,7 @@ def my_filter(self, f_cut, freq_dom, power_spectra):
         
     return np.copy(cp)
 
-def fourier_filter(self, time_series, data, f_cut, tr, time_points, trim):
+def fourier_filter(time_series, data, f_cut, tr, time_points, trim):
     """
     Performs a fourier transform on the data and runs it through a buttersworth filter before
     applying an inverse fourier transform and interpolating to the new time.
@@ -90,10 +90,10 @@ def fourier_filter(self, time_series, data, f_cut, tr, time_points, trim):
     """
     
     N = len(data)
-    freq, power, disp = self.fourier_trans(time_series, data, N)
+    freq, power, disp = fourier_trans(time_series, data, N)
     
     # pass freq domain data through filter
-    pre_invert = self.my_filter(f_cut, freq, power)
+    pre_invert = my_filter(f_cut, freq, power)
     inverted = ifft(pre_invert).real
     
     # create the target time series
@@ -110,7 +110,7 @@ def fourier_filter(self, time_series, data, f_cut, tr, time_points, trim):
     return df
 
 
-def fourier_filter_no_resample(self, time_series, data, f_cut, tr, trim):
+def fourier_filter_no_resample(time_series, data, f_cut, tr, trim):
     """
     Performs a fourier transform on the data and runs it through a buttersworth filter before
     applying an inverse fourier transform
@@ -131,10 +131,10 @@ def fourier_filter_no_resample(self, time_series, data, f_cut, tr, trim):
     """
     
     N = len(data)
-    freq, power, disp = self.fourier_trans(time_series, data, N)
+    freq, power, disp = fourier_trans(time_series, data, N)
     
     # pass freq domain data through filter
-    pre_invert = self.my_filter(f_cut, freq, power)
+    pre_invert = my_filter(f_cut, freq, power)
     inverted = ifft(pre_invert).real
     
     df = pd.DataFrame({'Time' : time_series,

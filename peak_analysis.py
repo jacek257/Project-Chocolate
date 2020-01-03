@@ -10,12 +10,11 @@ import scipy.signal as sg
 import scipy.interpolate as interp
 import pandas as pd
 import stat_utils
-import fft_analysis.py
-import stat_utils.py
+import fft_analysis
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def peak_four(self, df, verb, file, tr, time_pts, trough):
+def peak_four(df, verb, file, tr, time_pts, trough):
     
     f_CO2 = fft_analysis.fourier_filter_no_resample(df.Time, df.CO2, 1/60, tr, trim=True)
     
@@ -62,7 +61,7 @@ def peak_four(self, df, verb, file, tr, time_pts, trough):
     return CO2_final_df, O2_final_df
 
 
-def peak(self, df, verb, file, time_points):
+def peak(df, verb, file, time_points):
     """
     Get the peaks and troughs of CO2 and O2
     
@@ -166,9 +165,9 @@ def peak(self, df, verb, file, time_points):
     
     return CO2_final_df, O2_final_df
 
-def get_wlen(self, sig_time, sig):
+def get_wlen(sig_time, sig):
 
-    freq,_,disp = fft_analysis().fourier_trans(sig_time, sig, len(sig))
+    freq,_,disp = fft_analysis.fourier_trans(sig_time, sig, len(sig))
     window_it = np.argmax(disp[25:500])+25
     freq_val = freq[window_it] # this is the most prominent frequency
     window_mag = 1/freq_val
@@ -182,7 +181,7 @@ def get_wlen(self, sig_time, sig):
     return window_length
 
 
-def envelope(self, sig_time, sig, tr, invert):
+def envelope(sig_time, sig, tr, invert):
     """
     Params:
         sigtime (iterable) = the sampling time points of sig
@@ -198,7 +197,7 @@ def envelope(self, sig_time, sig, tr, invert):
     cpy = cpy.reset_index(drop=True)
     count = 0
 
-    window_length = self.get_wlen(sig_time, cpy)
+    window_length = get_wlen(sig_time, cpy)
     for i in range(0,len(cpy),window_length):
         for j in range(i, i+window_length):
             if j < len(cpy):
@@ -206,14 +205,25 @@ def envelope(self, sig_time, sig, tr, invert):
         count += 1
     if invert:
         cpy *= -1
+    plt.close()
+    sns.lineplot(x=sig_time, y=sig)
+    sns.lineplot(x=sig_time, y=cpy, color='r')
+    plt.show()
+    plt.close()
+    
     # get the sampling freq
     fs = len(cpy)/np.max(sig_time)
     # get cutoff freq
     fc = count / np.max(sig_time)
     w = fc / (fs / 2)
 
-    b, a = sg.butter(6, w, 'low', analog=False)
+    b, a = sg.butter(1, w, 'low', analog=False)
     filtered = sg.filtfilt(b, a, cpy)
-    signal_resampled = stat_utils().resamp(sig_time, time_pts, filtered, 0, 0)
+    signal_resampled = stat_utils.resamp(sig_time, time_pts, filtered, 0, 0)
+
+    sns.lineplot(x=sig_time, y=sig)
+    sns.lineplot(x=time_pts, y=signal_resampled, color='r')
+    plt.show()
+    plt.close()
     return pd.DataFrame({'Time' : time_pts,
                          'Data' : signal_resampled})

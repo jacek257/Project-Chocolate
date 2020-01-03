@@ -11,7 +11,7 @@ import signal
 import sys
 import time
 
-def kill_unending(self, processes, verb):
+def kill_unending(processes, verb):
     '''
     Kills processes if flirt has been running for too long so the FEAT can continue
     
@@ -39,7 +39,7 @@ def kill_unending(self, processes, verb):
     
     return
 
-def get_next_avail(self, processes, verb, limit, key, s_name):
+def get_next_avail(processes, verb, limit, key, s_name):
     '''
     Managues the queue for processes
     
@@ -75,7 +75,7 @@ def get_next_avail(self, processes, verb, limit, key, s_name):
                 if cursor >= len(spin):
                     cursor = 0
         
-        self.kill_unending(processes, verb)
+        kill_unending(processes, verb)
         
         for i, process in enumerate(processes):
             if process != None and process.poll() != None:
@@ -89,7 +89,7 @@ def get_next_avail(self, processes, verb, limit, key, s_name):
     
     return processes.index(None)
 
-def wait_remaining(self, processes, verb, key, s_name):
+def wait_remaining(processes, verb, key, s_name):
     '''
     Wait for the queue to empty
     
@@ -123,7 +123,7 @@ def wait_remaining(self, processes, verb, key, s_name):
                 if cursor >= len(spin):
                     cursor = 0
         
-        self.kill_unending(processes, verb)
+        kill_unending(processes, verb)
         
         for i, process in enumerate(processes):
             if process != None and process.poll() != None:

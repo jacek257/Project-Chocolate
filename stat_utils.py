@@ -12,7 +12,7 @@ import scipy.interpolate as interp
 from sklearn.linear_model import Ridge
 from scipy import stats
 
-def save_plots_comb(self, df, O2, O2_m, O2_f, O2_corr,
+def save_plots_comb(df, O2, O2_m, O2_f, O2_corr,
                     CO2, CO2_m, CO2_f, CO2_corr, meants,
                     coeff, coeff_f, comb_corr,
                     f_path, key, verb, time_points, disp):
@@ -31,50 +31,52 @@ def save_plots_comb(self, df, O2, O2_m, O2_f, O2_corr,
         plt.show()
 
     meants_norm = meants / meants.std()
-    O2_norm = O2.Data / O2.Data.std()
-    O2_m_norm = O2_m.Data / O2_m.Data.std()
     
-    f, axes = plt.subplots(2, 2)
-    f.suptitle(f_path[:-4].split('/')[-1])
-    
-    sns.lineplot(x='Time', y='O2', data=df, color='b', ax=axes[0, 0])
-    sns.lineplot(x='Time', y='Data', data=O2, color='g', ax=axes[0, 0])
-    axes[0, 0].set_title('Raw O2 vs Processed O2')
-    axes[0, 0].legend(['Raw O2', 'Processed O2'], facecolor='w')
-
-    sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0, 1])
-    sns.lineplot(x='Time', y=O2_norm, data=O2, color='g', ax=axes[0, 1])
-    axes[0, 1].set_title('Processed O2 vs BOLD')
-    axes[0, 1].legend(['BOLD', 'Processed O2'], facecolor='w')
-    
-    sns.lineplot(x=np.arange(-len(O2_corr)//2, len(O2_corr)//2)+1, y=O2_corr, ax=axes[1, 0])
-    axes[1, 0].set_title('Cross-Correlation')
-    axes[1, 0].legend(['Cross-Correlation'], facecolor='w')
-
-    sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1, 1])
-    sns.lineplot(x='Time', y=O2_m_norm, data=O2_m, color='g', ax=axes[1, 1])
-    axes[1, 1].set_title('Shifted O2 vs BOLD')
-    axes[1, 1].legend(['BOLD', 'Shifted O2'], facecolor='w')
-
-    if verb:
-        print('Saving O2 plot for', f_path)
-
-    save_path = save_path = f_path[:-4]+'/' + key + 'O2.png'
-    plt.savefig(save_path)
-    if verb:
-        print('Saving complete')
-    if disp:
-        plt.draw()
-        plt.pause(0.001)
-    else:
-        f.clf()
-        plt.close(fig=f)
-    
-    if verb:
-        print('Creating CO2 plots')
+    if O2 is not None:
+        O2_norm = O2.Data / O2.Data.std()
+        O2_m_norm = O2_m.Data / O2_m.Data.std()
         
-    f, axes = plt.subplots(2, 2)
-    f.suptitle(f_path[:-4].split('/')[-1])
+        f, axes = plt.subplots(2, 2)
+        f.suptitle(f_path[:-4].split('/')[-1])
+        
+        sns.lineplot(x='Time', y='O2', data=df, color='b', ax=axes[0, 0])
+        sns.lineplot(x='Time', y='Data', data=O2, color='g', ax=axes[0, 0])
+        axes[0, 0].set_title('Raw O2 vs Processed O2')
+        axes[0, 0].legend(['Raw O2', 'Processed O2'], facecolor='w')
+    
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0, 1])
+        sns.lineplot(x='Time', y=O2_norm, data=O2, color='g', ax=axes[0, 1])
+        axes[0, 1].set_title('Processed O2 vs BOLD')
+        axes[0, 1].legend(['BOLD', 'Processed O2'], facecolor='w')
+        
+        sns.lineplot(x=np.arange(-len(O2_corr)//2, len(O2_corr)//2)+1, y=O2_corr, ax=axes[1, 0])
+        axes[1, 0].set_title('Cross-Correlation')
+        axes[1, 0].legend(['Cross-Correlation'], facecolor='w')
+    
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1, 1])
+        sns.lineplot(x='Time', y=O2_m_norm, data=O2_m, color='g', ax=axes[1, 1])
+        axes[1, 1].set_title('Shifted O2 vs BOLD')
+        axes[1, 1].legend(['BOLD', 'Shifted O2'], facecolor='w')
+    
+        if verb:
+            print('Saving O2 plot for', f_path)
+    
+        save_path = save_path = f_path[:-4]+'/' + key + 'O2.png'
+        plt.savefig(save_path)
+        if verb:
+            print('Saving complete')
+        if disp:
+            plt.draw()
+            plt.pause(0.001)
+        else:
+            f.clf()
+            plt.close(fig=f)
+        
+        if verb:
+            print('Creating CO2 plots')
+            
+        f, axes = plt.subplots(2, 2)
+        f.suptitle(f_path[:-4].split('/')[-1])
     
     CO2_norm = CO2.Data / CO2.Data.std()
     CO2_m_norm = CO2_m.Data / CO2_m.Data.std()
@@ -130,71 +132,69 @@ def save_plots_comb(self, df, O2, O2_m, O2_f, O2_corr,
     axes[1].set_title('Cross-Correlation')
     axes[1].legend(['Cross-Correlation'], facecolor='w')
 
+    if O2 is not None:
+        O2_f_norm = O2_f / O2_f.std()
+        CO2_f_norm = CO2_f / CO2_f.std()
+        combined_s = coeff_f[0] * O2_f_norm + coeff_f[1] * CO2_f_norm + coeff_f[2]
+        combined_s /= combined_s.std()
+        
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[2])
+        sns.lineplot(x=time_points, y=combined_s, color='black', ax=axes[2])
+        axes[2].set_title('BOLD vs Shifted Combination')
+        axes[2].legend(['BOLD', 'Shifted Combination'], facecolor='w')
+        
+        if verb:
+            print('Saving combined plot for', f_path)
     
-    O2_f_norm = O2_f / O2_f.std()
-    CO2_f_norm = CO2_f / CO2_f.std()
-    combined_s = coeff_f[0] * O2_f_norm + coeff_f[1] * CO2_f_norm + coeff_f[2]
-    combined_s /= combined_s.std()
+        save_path = save_path = f_path[:-4]+'/' + key + 'combined.png'
+        plt.savefig(save_path)
+        if verb:
+            print('Saving complete')
+        if disp:
+            plt.draw()
+            plt.pause(0.001)
+        else:
+            f.clf()
+            plt.close(fig=f)
+        
+        if verb:
+            print('Creating stacked plot')
+        
+        f, axes = plt.subplots(2, 1)
+        f.suptitle(f_path[:-4].split('/')[-1])
+        
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0])
+        sns.lineplot(x='Time', y=O2_m_norm, data=O2_m, color='g', ax=axes[0])
+        sns.lineplot(x='Time', y=CO2_m_norm, data=CO2_m, color='r', ax=axes[0])
+        sns.lineplot(x=time_points, y=combined, color='black', ax=axes[0])
+        axes[0].set_title('Processed Gases vs BOLD')
+        axes[0].legend(['BOLD','Processed O2', 'Processed CO2', 'Combination'], facecolor='w')
+        
+        sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1])
+        sns.lineplot(x=time_points, y=O2_f_norm, color='g', ax=axes[1])
+        sns.lineplot(x=time_points, y=CO2_f_norm, color='r', ax=axes[1])
+        sns.lineplot(x=time_points, y=combined_s, color='black', ax=axes[1])
+        axes[1].set_title('Shifted Gases vs BOLD')
+        axes[1].legend(['BOLD','Shifted O2', 'Shifted CO2', 'Shifted Combination'], facecolor='w')
     
-    sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[2])
-    sns.lineplot(x=time_points, y=combined_s, color='black', ax=axes[2])
-    axes[2].set_title('BOLD vs Shifted Combination')
-    axes[2].legend(['BOLD', 'Shifted Combination'], facecolor='w')
+        if verb:
+            print('Saving stacked plot for', f_path)
     
-    if verb:
-        print('Saving combined plot for', f_path)
-
-    save_path = save_path = f_path[:-4]+'/' + key + 'combined.png'
-    plt.savefig(save_path)
-    if verb:
-        print('Saving complete')
-    if disp:
-        plt.draw()
-        plt.pause(0.001)
-    else:
-        f.clf()
-        plt.close(fig=f)
-    
-    if verb:
-        print('Creating stacked plot')
-    
-    f, axes = plt.subplots(2, 1)
-    f.suptitle(f_path[:-4].split('/')[-1])
-    
-    sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0])
-    sns.lineplot(x='Time', y=O2_m_norm, data=O2_m, color='g', ax=axes[0])
-    sns.lineplot(x='Time', y=CO2_m_norm, data=CO2_m, color='r', ax=axes[0])
-    sns.lineplot(x=time_points, y=combined, color='black', ax=axes[0])
-    axes[0].set_title('Processed Gases vs BOLD')
-    axes[0].legend(['BOLD','Processed O2', 'Processed CO2', 'Combination'], facecolor='w')
-    
-    sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1])
-    sns.lineplot(x=time_points, y=O2_f_norm, color='g', ax=axes[1])
-    sns.lineplot(x=time_points, y=CO2_f_norm, color='r', ax=axes[1])
-    sns.lineplot(x=time_points, y=combined_s, color='black', ax=axes[1])
-    axes[1].set_title('Shifted Gases vs BOLD')
-    axes[1].legend(['BOLD','Shifted O2', 'Shifted CO2', 'Shifted Combination'], facecolor='w')
-
-    if verb:
-        print('Saving stacked plot for', f_path)
-
-    save_path = save_path = f_path[:-4]+'/' + key + 'stacked.png'
-    plt.savefig(save_path)
-    if verb:
-        print('Saving complete')
-    if disp:
-        plt.draw()
-        plt.pause(0.001)
-    else:
-        f.clf()
-        plt.close(fig=f)
+        save_path = save_path = f_path[:-4]+'/' + key + 'stacked.png'
+        plt.savefig(save_path)
+        if verb:
+            print('Saving complete')
+        if disp:
+            plt.draw()
+            plt.pause(0.001)
+        else:
+            f.clf()
+            plt.close(fig=f)
     
     return    
 
-def save_plots_comb_extend(self, df, O2, O2_m, O2_f, O2_corr,
-                           CO2, CO2_m, CO2_f, CO2_corr, meants,
-                           coeff, coeff_f, comb_corr, extend_time,
-                           f_path, key, verb, time_points, disp):
+def save_plots_CO2(df, CO2, CO2_m, CO2_f, CO2_corr, meants,
+                   f_path, key, verb, time_points, disp):
     
     if verb:
         print('Creating O2 plots')
@@ -210,47 +210,6 @@ def save_plots_comb_extend(self, df, O2, O2_m, O2_f, O2_corr,
         plt.show()
 
     meants_norm = meants / meants.std()
-    O2_norm = O2.Data / O2.Data.std()
-    O2_m_norm = O2_m.Data / O2_m.Data.std()
-    
-    f, axes = plt.subplots(2, 2)
-    f.suptitle(f_path[:-4].split('/')[-1])
-    
-    sns.lineplot(x='Time', y='O2', data=df, color='b', ax=axes[0, 0])
-    sns.lineplot(x='Time', y='Data', data=O2, color='g', ax=axes[0, 0])
-    axes[0, 0].set_title('Raw O2 vs Processed O2')
-    axes[0, 0].legend(['Raw O2', 'Processed O2'], facecolor='w')
-
-    sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0, 1])
-    sns.lineplot(x='Time', y=O2_norm, data=O2, color='g', ax=axes[0, 1])
-    axes[0, 1].set_title('Processed O2 vs BOLD')
-    axes[0, 1].legend(['BOLD', 'Processed O2'], facecolor='w')
-    
-    sns.lineplot(x=np.arange(-len(O2_corr)//2, len(O2_corr)//2)+1, y=O2_corr, ax=axes[1, 0])
-    axes[1, 0].set_title('Cross-Correlation')
-    axes[1, 0].legend(['Cross-Correlation'], facecolor='w')
-
-    sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1, 1])
-    sns.lineplot(x='Time', y=O2_m_norm, data=O2_m, color='g', ax=axes[1, 1])
-    axes[1, 1].set_title('Shifted O2 vs BOLD')
-    axes[1, 1].legend(['BOLD', 'Shifted O2'], facecolor='w')
-
-    if verb:
-        print('Saving O2 plot for', f_path)
-
-    save_path = save_path = f_path[:-4]+'/' + key + 'O2.png'
-    plt.savefig(save_path)
-    if verb:
-        print('Saving complete')
-    if disp:
-        plt.draw()
-        plt.pause(0.001)
-    else:
-        f.clf()
-        plt.close(fig=f)
-    
-    if verb:
-        print('Creating CO2 plots')
         
     f, axes = plt.subplots(2, 2)
     f.suptitle(f_path[:-4].split('/')[-1])
@@ -297,80 +256,9 @@ def save_plots_comb_extend(self, df, O2, O2_m, O2_f, O2_corr,
     f, axes = plt.subplots(3, 1)
     f.suptitle(f_path[:-4].split('/')[-1])
     
-    combined = coeff[0] * O2_m_norm + coeff[1] * CO2_m_norm + coeff[2]
-    combined /= combined.std()
-    
-    sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0])
-    sns.lineplot(x='Time', y=combined, data=CO2, color='black', ax=axes[0])
-    axes[0].set_title('BOLD vs Combination')
-    axes[0].legend(['BOLD', 'Combination'], facecolor='w')
-    
-    sns.lineplot(x=np.arange(-len(comb_corr)//2, len(comb_corr)//2)+1, y=comb_corr, ax=axes[1])
-    axes[1].set_title('Cross-Correlation')
-    axes[1].legend(['Cross-Correlation'], facecolor='w')
-
-    
-    O2_f_norm = O2_f / O2_f.std()
-    CO2_f_norm = CO2_f / CO2_f.std()
-    combined_s = coeff_f[0] * O2_f_norm + coeff_f[1] * CO2_f_norm + coeff_f[2]
-    combined_s /= combined_s.std()
-    
-    sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[2])
-    sns.lineplot(x=extend_time, y=combined_s, color='black', ax=axes[2])
-    axes[2].set_title('BOLD vs Shifted Combination')
-    axes[2].legend(['BOLD', 'Shifted Combination'], facecolor='w')
-    
-    if verb:
-        print('Saving combined plot for', f_path)
-
-    save_path = save_path = f_path[:-4]+'/' + key + 'combined.png'
-    plt.savefig(save_path)
-    if verb:
-        print('Saving complete')
-    if disp:
-        plt.draw()
-        plt.pause(0.001)
-    else:
-        f.clf()
-        plt.close(fig=f)
-    
-    if verb:
-        print('Creating stacked plot')
-    
-    f, axes = plt.subplots(2, 1)
-    f.suptitle(f_path[:-4].split('/')[-1])
-    
-    sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[0])
-    sns.lineplot(x='Time', y=O2_m_norm, data=O2_m, color='g', ax=axes[0])
-    sns.lineplot(x='Time', y=CO2_m_norm, data=CO2_m, color='r', ax=axes[0])
-    sns.lineplot(x=time_points, y=combined, color='black', ax=axes[0])
-    axes[0].set_title('Processed Gases vs BOLD')
-    axes[0].legend(['BOLD','Processed O2', 'Processed CO2', 'Combination'], facecolor='w')
-    
-    sns.lineplot(x=time_points, y=meants_norm, color='b', ax=axes[1])
-    sns.lineplot(x=extend_time, y=O2_f_norm, color='g', ax=axes[1])
-    sns.lineplot(x=extend_time, y=CO2_f_norm, color='r', ax=axes[1])
-    sns.lineplot(x=extend_time, y=combined_s, color='black', ax=axes[1])
-    axes[1].set_title('Shifted Gases vs BOLD')
-    axes[1].legend(['BOLD','Shifted O2', 'Shifted CO2', 'Shifted Combination'], facecolor='w')
-
-    if verb:
-        print('Saving stacked plot for', f_path)
-
-    save_path = save_path = f_path[:-4]+'/' + key + 'stacked.png'
-    plt.savefig(save_path)
-    if verb:
-        print('Saving complete')
-    if disp:
-        plt.draw()
-        plt.pause(0.001)
-    else:
-        f.clf()
-        plt.close(fig=f)
-    
     return    
 
-def get_info(self, sigs, sig_fit):
+def get_info(sigs, sig_fit):
     '''
     Get the coefficents to preform a linear combination of the 2 sigs to fit to sig_fit
     
@@ -406,7 +294,7 @@ def get_info(self, sigs, sig_fit):
 
     return clf.coef_, stat[0], stat[1]
 
-def resamp(self, og_time, new_time, data, shift, start):
+def resamp(og_time, new_time, data, shift, start):
     '''
     Interpolates the data from original time to the new target time
     
@@ -444,7 +332,7 @@ def resamp(self, og_time, new_time, data, shift, start):
     
     return shifted
 
-def resamp_f(self, og_time, new_time, data, shift, start, tr):
+def resamp_f(og_time, new_time, data, shift, start, tr):
     '''
     Interpolates the data from original time to the new target time
     
@@ -484,7 +372,7 @@ def resamp_f(self, og_time, new_time, data, shift, start, tr):
     
     return shifted, new_time
 
-def trim_edges(self, df):
+def trim_edges(df):
     '''
     Trims to edges of the data that are considered noise
     

@@ -40,7 +40,7 @@ parser.add_argument("-o", "--overwrite", action='store_true', help='overwrite ex
 parser.add_argument("-m", "--manual", action='store_true', help='switch analysis to manual')
 parser.add_argument("-s", "--sh", action='store_true', help='process SH cohort')
 parser.add_argument("-w", "--wh", action='store_true', help='process WH cohort')
-parser.add_argument("-i", "--invert", action='store_true', help='process failures by inverting O2 and CO2 detection and have no time_shift')
+parser.add_argument("-i", "--invert", action='store_true', help='process failures by inverting O2 and CO2 detection and have')
 
 
 #get the positional arguments
@@ -62,11 +62,11 @@ invert = True if args.invert else False
 home_dir = '/media/ke/8tb_part2/FSL_work/'
 if sh:
     nifti_dir = '/media/ke/8tb_part2/FSL_work/SH_info/'
-    processed_dir = '/media/ke/8tb_part2/FSL_work/SH_info/BOLD_processed'
+    processed_dir = '/media/ke/8tb_part2/FSL_work/SH_info/BOLD_processed/'
     freesurfer_t1_dir = '/media/ke/8tb_part2/FSL_work/SH_FST1/'
 elif wh:
     nifti_dir = '/media/ke/8tb_part2/FSL_work/WH_info/'
-    processed_dir = '/media/ke/8tb_part2/FSL_work/WH_info/BOLD_processed'
+    processed_dir = '/media/ke/8tb_part2/FSL_work/WH_info/BOLD_processed/'
     freesurfer_t1_dir = '/media/ke/8tb_part2/FSL_work/WH_FST1/'
 else:
     nifti_dir = '/media/ke/8tb_part2/FSL_work/all_info/'
@@ -115,7 +115,7 @@ for f in txt_files:
         
     file = f.split('_')
 #    p_id = file[0].upper() + file[1]
-    p_id = file[0].upper()
+    p_id = file[0].upper() if len(file[0]) > 4 else file[0].upper()+file[1]
     p_dic['ID'].append(p_id)
     p_dic['Date'].append(file[2])
     p_dic['EndTidal_Path'].append(path+f)
@@ -159,7 +159,7 @@ for i in range(len(p_df)):
     patient_dir = patient_dir[0] # patient dir is a list of len 1, need to actual string
     
     #get all matching files
-    b_files = [file for file in os.listdir(patient_dir + '/BOLD/') if file.endswith('.nii') and len(file.split('_')) == 3]
+    b_files = [file for file in os.listdir(patient_dir + '/BOLD/') if file.endswith('.nii')]
     fs_files = [file for file in os.listdir(freesurfer_t1_dir)  if fnmatch.fnmatch(file, p_df.ID[i]+'_'+p_df.Date[i]+'*_T1.nii*')]
     
     # check for the other naming convention
@@ -403,24 +403,41 @@ for typ in ['block']:
         save_meants = '/home/ke/Desktop/all_meants/'
 #        meants_df.to_csv(save_meants+id+'_'+date+f_path[-10:-4]+'.txt', index=False, header=False)
         meants_df.to_excel(save_meants+id+'_'+date+f_path[-10:-4]+'.xlsx', index=False, header=False)
-        exit()
 #        continue
+        
+        CO2_only = False
+        # Starting 2020, WH cohort was fed CO2 gas challenge only
+        print(date)
+        if (id[:2] == 'WH' and int(date) > 20200000) or id[:3] == 'CVR':
+            CO2_only = True
     
         #generate cleaned data paths
-        save_O2 = f_path[:-4]+'/'+key+'O2_contrast.txt'
+        if not CO2_only:
+            save_O2 = f_path[:-4]+'/'+key+'O2_contrast.txt'
         save_CO2 = f_path[:-4]+'/'+key+'CO2_contrast.txt'
         save = True
     
         #check if the save_files already exist
-        if(os.path.exists(save_O2) and os.path.exists(save_CO2) and not over):
-            save = False
-            if(verb):
-                print('\tID: ', id + '_' + date," \tProcessed gas files already exist")
-            ET_dict['ETO2'].append(save_O2)
-            ET_dict['ETCO2'].append(save_CO2)
-            ET_dict['ET_exists'].append(True)
-            processed_O2 = np.loadtxt(save_O2)
-            processed_CO2 = np.loadtxt(save_CO2)
+        if not CO2_only:
+            if(os.path.exists(save_O2) and os.path.exists(save_CO2) and not over):
+                save = False
+                if(verb):
+                    print('\tID: ', id + '_' + date," \tProcessed gas files already exist")
+                ET_dict['ETO2'].append(save_O2)
+                ET_dict['ETCO2'].append(save_CO2)
+                ET_dict['ET_exists'].append(True)
+                processed_O2 = np.loadtxt(save_O2)
+                processed_CO2 = np.loadtxt(save_CO2)
+        else:
+            if(os.path.exists(save_CO2) and not over):
+                save = False
+                if(verb):
+                    print('\tID: ', id + '_' + date," \tProcessed gas files already exist")
+                ET_dict['ETO2'].append(None)
+                ET_dict['ETCO2'].append(save_CO2)
+                ET_dict['ET_exists'].append(True)
+                processed_O2 = None
+                processed_CO2 = np.loadtxt(save_CO2)
     
         # need to scale CO2 data is necessary
         if endTidal.CO2.max() < 1:
@@ -461,8 +478,12 @@ for typ in ['block']:
         endTidal.CO2 = endTidal.CO2 - endTidal.CO2.mean()
         endTidal.O2 = endTidal.O2 - endTidal.O2.mean()
         
-
-        if four:
+        if CO2_only:
+            if verb:
+                print('Starting CO2 analysis only for', id + '_' + date)
+            pre_CO2 = peak_analysis.envelope(endTidal.Time, endTidal.CO2, tr, invert)
+            pre_O2 = None
+        elif four:
             if verb:
                 print('Starting fourier for', id + '_' + date)
             # get fourier cleaned data
@@ -498,16 +519,19 @@ for typ in ['block']:
 #        plt.show()
 #        exit()
         
-        if verb:
-            print('Shifting O2')
-        # get O2 shift   
-        full_O2, processed_O2, O2_corr, O2_shift, O2_start = shifter.corr_align(meants, pre_O2.Time, pre_O2.Data, scan_time, time_pts, None, invert) # no ref_shift need for O2
-#        plt.plot(O2_corr)
-#        plt.show()
-#        plt.plot(processed_O2)
-#        plt.show()
-        # get O2 r and p values
-        O2_r, O2_p = st.pearsonr(processed_O2, meants)
+        if pre_O2 is not None:
+            if verb:
+                print('Shifting O2')
+            # get O2 shift   
+            full_O2, processed_O2, O2_corr, O2_shift, O2_start = shifter.corr_align(meants, pre_O2.Time, pre_O2.Data, scan_time, time_pts, None, invert) # no ref_shift need for O2
+    #        plt.plot(O2_corr)
+    #        plt.show()
+    #        plt.plot(processed_O2)
+    #        plt.show()
+            # get O2 r and p values
+            O2_r, O2_p = st.pearsonr(processed_O2, meants)
+        else:
+            O2_start = None
         
         if verb:
             print('Shifting CO2')
@@ -519,64 +543,68 @@ for typ in ['block']:
 #        plt.show()
         # get CO2 r and p values
         CO2_r, CO2_p = st.pearsonr(processed_CO2, meants)
-        if verb:
-            print('Combining O2 and CO2')
-        # combine the shfited O2 and CO2 and get the combined r and p values
-        coeff, comb_r, comb_p = stat_utils.get_info([processed_O2, processed_CO2], meants)        
-        combined = coeff[0] * processed_O2 + coeff[1] * processed_CO2 + coeff[2]
-        if verb:
-            print('Shifting Combination')
-        # get the shift for the combination
-        full_comb, processed_comb, comb_corr, comb_shift, comb_start = shifter.corr_align(meants, time_pts, combined, scan_time, time_pts, None, invert)
-        # add the combined shift to O2 and CO2 shifts
-        O2_f_shift = O2_shift + comb_shift
-        CO2_f_shift = CO2_shift + comb_shift
-
-        if verb:
-            print('Interperolating original O2 and CO2 based on final shift')
-        # interpolate the filtered O2 and CO2 data to fit the new time shifts      
-        processed_O2_f = stat_utils.resamp(pre_O2.Time + O2_f_shift, time_pts, pre_O2.Data, O2_f_shift, O2_start+comb_start)
-        processed_CO2_f = stat_utils.resamp(pre_CO2.Time + CO2_f_shift, time_pts, pre_CO2.Data, CO2_f_shift, CO2_start+comb_start)
         
-        # get final O2 r and p values
-        O2_f_r, O2_f_p = st.pearsonr(processed_O2_f, meants)
-        # get final CO2 r and p values
-        CO2_f_r, CO2_f_p = st.pearsonr(processed_CO2_f, meants)
+        if pre_O2 is not None:
+            if verb:
+                print('Combining O2 and CO2')
+            # combine the shfited O2 and CO2 and get the combined r and p values
+            coeff, comb_r, comb_p = stat_utils.get_info([processed_O2, processed_CO2], meants)        
+            combined = coeff[0] * processed_O2 + coeff[1] * processed_CO2 + coeff[2]
+            if verb:
+                print('Shifting Combination')
+            # get the shift for the combination
+            full_comb, processed_comb, comb_corr, comb_shift, comb_start = shifter.corr_align(meants, time_pts, combined, scan_time, time_pts, None, invert)
+            # add the combined shift to O2 and CO2 shifts
+            O2_f_shift = O2_shift + comb_shift
+            CO2_f_shift = CO2_shift + comb_shift
     
-        # get the combine the final shift signals and get their r and p values
-        coeff_f, comb_f_r, comb_f_p = stat_utils.get_info([processed_O2_f, processed_CO2_f], meants)
+            if verb:
+                print('Interperolating original O2 and CO2 based on final shift')
+            # interpolate the filtered O2 and CO2 data to fit the new time shifts      
+            processed_O2_f = stat_utils.resamp(pre_O2.Time + O2_f_shift, time_pts, pre_O2.Data, O2_f_shift, O2_start+comb_start)
+            processed_CO2_f = stat_utils.resamp(pre_CO2.Time + CO2_f_shift, time_pts, pre_CO2.Data, CO2_f_shift, CO2_start+comb_start)
+            
+            # get final O2 r and p values
+            O2_f_r, O2_f_p = st.pearsonr(processed_O2_f, meants)
+            # get final CO2 r and p values
+            CO2_f_r, CO2_f_p = st.pearsonr(processed_CO2_f, meants)
+        
+            # get the combine the final shift signals and get their r and p values
+            coeff_f, comb_f_r, comb_f_p = stat_utils.get_info([processed_O2_f, processed_CO2_f], meants)
+        else:
+            processed_CO2_f = processed_CO2
         
 #        processed_O2_f, extend_time = analysis.stat_utils().resamp_f(pre_O2.Time + O2_f_shift, time_pts, pre_O2.Data, O2_f_shift, O2_start+comb_start, tr)
 #        processed_CO2_f, extend_time = analysis.stat_utils().resamp_f(pre_CO2.Time + CO2_f_shift, time_pts, pre_CO2.Data, CO2_f_shift, CO2_start+comb_start, tr)
 
         # save the relevant information into the ET_dict
-        ET_dict['O2_shift'].append(O2_shift)
+        ET_dict['O2_shift'].append(O2_shift if pre_O2 is not None else None)
         ET_dict['CO2_shift'].append(CO2_shift)
-        ET_dict['d_shift'].append(CO2_shift-O2_shift)
-        ET_dict['comb_shift'].append(comb_shift)
-        ET_dict['O2_f_shift'].append(O2_f_shift)
-        ET_dict['CO2_f_shift'].append(CO2_f_shift)
+        ET_dict['d_shift'].append(CO2_shift-O2_shift if pre_O2 is not None else None)
+        ET_dict['comb_shift'].append(comb_shift if pre_O2 is not None else None)
+        ET_dict['O2_f_shift'].append(O2_f_shift if pre_O2 is not None else None)
+        ET_dict['CO2_f_shift'].append(CO2_f_shift if pre_O2 is not None else None)
         
-        ET_dict['O2_r'].append(O2_r)
+        ET_dict['O2_r'].append(O2_r if pre_O2 is not None else None)
         ET_dict['CO2_r'].append(CO2_r)
-        ET_dict['comb_r'].append(comb_r)
+        ET_dict['comb_r'].append(comb_r if pre_O2 is not None else None)
         
-        ET_dict['O2_p'].append(O2_p)
+        ET_dict['O2_p'].append(O2_p if pre_O2 is not None else None)
         ET_dict['CO2_p'].append(CO2_p)
-        ET_dict['comb_p'].append(comb_p)
+        ET_dict['comb_p'].append(comb_p if pre_O2 is not None else None)
         
-        ET_dict['O2_f_r'].append(O2_f_r)
-        ET_dict['CO2_f_r'].append(CO2_f_r)
-        ET_dict['comb_f_r'].append(comb_f_r)
+        ET_dict['O2_f_r'].append(O2_f_r if pre_O2 is not None else None)
+        ET_dict['CO2_f_r'].append(CO2_f_r if pre_O2 is not None else None)
+        ET_dict['comb_f_r'].append(comb_f_r if pre_O2 is not None else None)
         
-        ET_dict['O2_f_p'].append(O2_f_p)
-        ET_dict['CO2_f_p'].append(CO2_f_p)
-        ET_dict['comb_f_p'].append(comb_f_p)
+        ET_dict['O2_f_p'].append(O2_f_p if pre_O2 is not None else None)
+        ET_dict['CO2_f_p'].append(CO2_f_p if pre_O2 is not None else None)
+        ET_dict['comb_f_p'].append(comb_f_p if pre_O2 is not None else None)
         
         
         if save:
             #storing cleaned data paths
-            ET_dict['ETO2'].append(save_O2)
+            ET_dict['ETO2'].append(save_O2 if pre_O2 is not None else None)
             ET_dict['ETCO2'].append(save_CO2)
             ET_dict['ET_exists'].append(True)
             
@@ -584,7 +612,8 @@ for typ in ['block']:
                 print('Saving')
             
             #save data
-            np.savetxt(save_O2, processed_O2_f, delimiter='\t')
+            if not CO2_only:
+                np.savetxt(save_O2, processed_O2_f, delimiter='\t')
             np.savetxt(save_CO2, processed_CO2_f, delimiter='\t')
     
 #            # save and create plots (shifts)
@@ -592,10 +621,14 @@ for typ in ['block']:
 #                                               CO2=pre_CO2, CO2_m=full_CO2, CO2_f=processed_CO2_f, CO2_corr=CO2_corr, meants=meants,
 #                                               coeff=coeff, coeff_f=coeff_f, comb_corr=comb_corr, extend_time=extend_time,
 #                                               f_path=f_path, key=key, verb=verb, time_points=time_pts, disp=disp)
-            stat_utils.save_plots_comb(df=endTidal, O2=pre_O2, O2_m=full_O2, O2_f=processed_O2_f, O2_corr=O2_corr,
-                                       CO2=pre_CO2, CO2_m=full_CO2, CO2_f=processed_CO2_f, CO2_corr=CO2_corr, meants=meants,
-                                       coeff=coeff, coeff_f=coeff_f, comb_corr=comb_corr,
-                                       f_path=f_path, key=key, verb=verb, time_points=time_pts, disp=disp)
+            if CO2_only:
+                stat_utils.save_plots_CO2(df=endTidal, CO2=pre_CO2, CO2_m=full_CO2, CO2_f=processed_CO2_f, CO2_corr=CO2_corr, meants=meants,
+                                          f_path=f_path, key=key, verb=verb, time_points=time_pts, disp=disp)
+            else:
+                stat_utils.save_plots_comb(df=endTidal, O2=pre_O2, O2_m=full_O2, O2_f=processed_O2_f, O2_corr=O2_corr,
+                                           CO2=pre_CO2, CO2_m=full_CO2, CO2_f=processed_CO2_f, CO2_corr=CO2_corr, meants=meants,
+                                           coeff=coeff, coeff_f=coeff_f, comb_corr=comb_corr,
+                                           f_path=f_path, key=key, verb=verb, time_points=time_pts, disp=disp)
     
     if verb:
         print()
@@ -630,42 +663,76 @@ for typ in ['block']:
         os.mkdir(feat_dir+'design_files/')
     
     # load design template
-    with open(feat_dir+'design_files/template', 'r') as template:
-        stringTemp = template.read()
-        for i in range(len(df)):
-            output_dir = feat_dir+key+df.ID[i]+'_'+df.Date[i]
-#            output_dir = '/media/ke/8tb_part2/FSL_work/feat/both_shift/'+key+df.ID[i]+'_'+df.Date[i]
-            if os.path.exists(output_dir+'.feat'):
-                if verb:
-                    print('FEAT already exists for', key+df.ID[i]+'_'+df.Date[i])
-                if over:
+    for i in range(len(df)):
+        if df['O2_r'][i] is not None:
+            with open(feat_dir+'design_files/template', 'r') as template:
+                stringTemp = template.read()
+                output_dir = feat_dir+key+df.ID[i]+'_'+df.Date[i]
+    #            output_dir = '/media/ke/8tb_part2/FSL_work/feat/both_shift/'+key+df.ID[i]+'_'+df.Date[i]
+                if os.path.exists(output_dir+'.feat'):
                     if verb:
-                        print('Overwriting')
-                    subprocess.run(['rm', '-rf', output_dir+'.feat'])
-                else:
-                    continue
-            to_write = stringTemp[:]
-            # print(to_write)
-            to_write = to_write.replace("%%OUTPUT_DIR%%",'"'+output_dir+'"')
-            to_write = to_write.replace("%%VOLUMES%%",'"'+str(df.Volumes[i])+'"')
-            to_write = to_write.replace("%%TR%%",'"'+str(df.eff_TR[i])+'"')
-            to_write = to_write.replace("%%BOLD_FILE%%",'"'+df.BOLD_path[i]+'"')
-            to_write = to_write.replace("%%FS_T1%%",'"'+df.T1_path[i]+'"')
-            to_write = to_write.replace("%%O2_CONTRAST%%",'"'+df.ETO2[i]+'"')
-            to_write = to_write.replace("%%CO2_CONTRAST%%",'"'+df.ETCO2[i]+'"')
-    
-            ds_path = feat_dir+'design_files/'+key+df.ID[i]+'_'+df.Date[i]+'.fsf'
-            with open(ds_path, 'w+') as outFile:
-                outFile.write(to_write)
-                        
-            index = parallel_processing.get_next_avail(processes, verb, limit, key, 'FEAT')
-            
-            if verb:
-                print('Starting FEAT')
-            processes[index] = subprocess.Popen(['feat', ds_path])
-            time.sleep(0.5)
+                        print('FEAT already exists for', key+df.ID[i]+'_'+df.Date[i])
+                    if over:
+                        if verb:
+                            print('Overwriting')
+                        subprocess.run(['rm', '-rf', output_dir+'.feat'])
+                    else:
+                        continue
+                to_write = stringTemp[:]
+                # print(to_write)
+                to_write = to_write.replace("%%OUTPUT_DIR%%",'"'+output_dir+'"')
+                to_write = to_write.replace("%%VOLUMES%%",'"'+str(df.Volumes[i])+'"')
+                to_write = to_write.replace("%%TR%%",'"'+str(df.eff_TR[i])+'"')
+                to_write = to_write.replace("%%BOLD_FILE%%",'"'+df.BOLD_path[i]+'"')
+                to_write = to_write.replace("%%FS_T1%%",'"'+df.T1_path[i]+'"')
+                to_write = to_write.replace("%%O2_CONTRAST%%",'"'+df.ETO2[i]+'"')
+                to_write = to_write.replace("%%CO2_CONTRAST%%",'"'+df.ETCO2[i]+'"')
         
-        parallel_processing.wait_remaining(processes, verb, key, 'FEAT')
+                ds_path = feat_dir+'design_files/'+key+df.ID[i]+'_'+df.Date[i]+'.fsf'
+                with open(ds_path, 'w+') as outFile:
+                    outFile.write(to_write)
+                            
+                index = parallel_processing.get_next_avail(processes, verb, limit, key, 'FEAT')
+                
+                if verb:
+                    print('Starting FEAT')
+                processes[index] = subprocess.Popen(['feat', ds_path])
+                time.sleep(0.5)
+        else:
+            with open(feat_dir+'design_files/template2', 'r') as template:
+                stringTemp = template.read()
+                output_dir = feat_dir+key+df.ID[i]+'_'+df.Date[i]
+    #            output_dir = '/media/ke/8tb_part2/FSL_work/feat/both_shift/'+key+df.ID[i]+'_'+df.Date[i]
+                if os.path.exists(output_dir+'.feat'):
+                    if verb:
+                        print('FEAT already exists for', key+df.ID[i]+'_'+df.Date[i])
+                    if over:
+                        if verb:
+                            print('Overwriting')
+                        subprocess.run(['rm', '-rf', output_dir+'.feat'])
+                    else:
+                        continue
+                to_write = stringTemp[:]
+                # print(to_write)
+                to_write = to_write.replace("%%OUTPUT_DIR%%",'"'+output_dir+'"')
+                to_write = to_write.replace("%%VOLUMES%%",'"'+str(df.Volumes[i])+'"')
+                to_write = to_write.replace("%%TR%%",'"'+str(df.eff_TR[i])+'"')
+                to_write = to_write.replace("%%BOLD_FILE%%",'"'+df.BOLD_path[i]+'"')
+                to_write = to_write.replace("%%FS_T1%%",'"'+df.T1_path[i]+'"')
+                to_write = to_write.replace("%%CO2_CONTRAST%%",'"'+df.ETCO2[i]+'"')
+        
+                ds_path = feat_dir+'design_files/'+key+df.ID[i]+'_'+df.Date[i]+'.fsf'
+                with open(ds_path, 'w+') as outFile:
+                    outFile.write(to_write)
+                            
+                index = parallel_processing.get_next_avail(processes, verb, limit, key, 'FEAT')
+                
+                if verb:
+                    print('Starting FEAT')
+                processes[index] = subprocess.Popen(['feat', ds_path])
+                time.sleep(0.5)
+            
+    parallel_processing.wait_remaining(processes, verb, key, 'FEAT')
         
     # run featquery
     for i in range(len(df)):
@@ -673,23 +740,9 @@ for typ in ['block']:
         feat_output_dir = feat_dir+p_id+'.feat/'
 #        feat_output_dir = '/media/ke/8tb_part2/FSL_work/feat/both_shift/'+p_id+'.feat/'
         
-        O2_mask_dir_path = feat_output_dir+'cluster_mask_zstat1.nii.gz'
-        CO2_mask_dir_path = feat_output_dir+'cluster_mask_zstat2.nii.gz'
+        CO2_mask_dir_path = feat_output_dir+'cluster_mask_zstat1.nii.gz'
+        O2_mask_dir_path = feat_output_dir+'cluster_mask_zstat2.nii.gz'
                     
-        index = parallel_processing.get_next_avail(processes, verb, limit, key, 'featquery')
-        
-        if os.path.exists(feat_output_dir+'fq_O2'):
-            if verb:
-                print('O2 featquery already exists for', p_id)
-            if over:
-                if verb:
-                    print('Overwriting')
-                processes[index] = subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope1', 'fq_O2', '-p', '-s', O2_mask_dir_path])
-        else:
-            if verb:
-                print('Starting O2 featquery for', p_id)
-            processes[index] = subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope1', 'fq_O2', '-p', '-s', O2_mask_dir_path])
-        
         index = parallel_processing.get_next_avail(processes, verb, limit, key, 'featquery')
         
         if os.path.exists(feat_output_dir+'fq_CO2'):
@@ -698,11 +751,25 @@ for typ in ['block']:
             if over:
                 if verb:
                     print('Overwriting')
-                processes[index] = subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope2', 'fq_CO2', '-p', '-s', CO2_mask_dir_path])
+                processes[index] = subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope1', 'fq_CO2', '-p', '-s', CO2_mask_dir_path])
         else:
             if verb:
-                print('Starting featquery for CO2')
-            processes[index] = subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope2', 'fq_CO2', '-p', '-s', CO2_mask_dir_path])
+                print('Starting CO2 featquery for', p_id)
+            processes[index] = subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope1', 'fq_CO2', '-p', '-s', CO2_mask_dir_path])
+        
+        index = parallel_processing.get_next_avail(processes, verb, limit, key, 'featquery')
+        
+        if os.path.exists(feat_output_dir+'fq_O2'):
+            if verb:
+                print('O2 featquery already exists for', p_id)
+            if over:
+                if verb:
+                    print('Overwriting')
+                processes[index] = subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope2', 'fq_O2', '-p', '-s', O2_mask_dir_path])
+        else:
+            if verb:
+                print('Starting featquery for O2')
+            processes[index] = subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope2', 'fq_O2', '-p', '-s', O2_mask_dir_path])
     
 
     parallel_processing.wait_remaining(processes, verb, key, 'featquery')
@@ -770,10 +837,10 @@ for typ in ['block']:
                    'COPE-MEAN' : ['']}
             cz2_final = pd.DataFrame(z2)
         
-        build = cz1_final.merge(cz2_final, on=['ID', 'type'], suffixes=('_O2', '_CO2'))
+        build = cz1_final.merge(cz2_final, on=['ID', 'type'], suffixes=('_CO2', '_O2'))
         
-        O2_mask_dir_path = feat_output_dir+'cluster_mask_zstat1.nii.gz'
-        CO2_mask_dir_path = feat_output_dir+'cluster_mask_zstat2.nii.gz'
+        CO2_mask_dir_path = feat_output_dir+'cluster_mask_zstat1.nii.gz'
+        O2_mask_dir_path = feat_output_dir+'cluster_mask_zstat2.nii.gz'
             
         O2 = feat_output_dir+'fq_O2/'
         try:
