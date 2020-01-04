@@ -110,8 +110,8 @@ for f in txt_files:
             break
     
     if ed:
-        f = f[:op] + f[ed+1:]
-        notes = f[op:ed]
+        notes = f[op+1:ed]
+        f = f[:op-1] + f[ed+1:]
         
     file = f.split('_')
 #    p_id = file[0].upper() + file[1]
@@ -345,8 +345,18 @@ for typ in ['block']:
     
     if verb:
         print('\n\nStart processing each patient')
-    for f_path, vol, id, date, b_path, p_path, meants_path, tr in zip(p_df.EndTidal_Path, p_df.Volumes, p_df.ID, p_df.Date,
-                                                                              p_df.BOLD_corrected_path, p_df.Processed_path, p_df.meants_path, p_df.eff_TR):
+    for f_path, vol, id, date, b_path, p_path, meants_path, tr, notes in zip(p_df.EndTidal_Path, p_df.Volumes, p_df.ID, p_df.Date,
+                                                                      p_df.BOLD_corrected_path, p_df.Processed_path, p_df.meants_path,
+                                                                      p_df.eff_TR, p_df.Notes):
+        
+        if not notes == 'O2+CO2':
+            f_path = f_path.split('_')
+            print(f_path)
+            f_path.insert(-2, '('+notes+')')
+            print(f_path)
+            f_path = '_'.join(f_path)
+            print(f_path)
+        
         if not os.path.exists(f_path[:-4]):
             os.mkdir(f_path[:-4])
     
@@ -641,6 +651,7 @@ for typ in ['block']:
     
     #construct new DataFrame
     et_frame = pd.DataFrame(ET_dict)
+    print(et_frame)
     
     #merge and drop bad entries
     df = p_df.merge(et_frame, on=['ID', 'Date'], how='inner')
@@ -889,18 +900,19 @@ for typ in ['block']:
         build['comb_shift'] = df.comb_shift[i]
         build['O2_f_shift'] = df.O2_f_shift[i]
         build['CO2_f_shift'] = df.CO2_f_shift[i]
-        build['O2_r'] = df.O2_r[i]
-        build['CO2_r'] = df.CO2_r[i]
-        build['comb_r'] = df.comb_r[i]
-        build['O2_p'] = df.O2_p[i]
-        build['CO2_p'] = df.CO2_p[i]
-        build['comb_p'] = df.comb_p[i]
-        build['O2_f_r'] = df.O2_f_r[i]
-        build['CO2_f_r'] = df.CO2_f_r[i]
-        build['comb_f_r'] = df.comb_f_r[i]
-        build['O2_f_p'] = df.O2_f_p[i]
-        build['CO2_f_p'] = df.CO2_f_p[i]
-        build['comb_f_p'] = df.comb_f_p[i]
+#        build['O2_r'] = df.O2_r[i]
+#        build['CO2_r'] = df.CO2_r[i]
+#        build['comb_r'] = df.comb_r[i]
+#        build['O2_p'] = df.O2_p[i]
+#        build['CO2_p'] = df.CO2_p[i]
+#        build['comb_p'] = df.comb_p[i]
+#        build['O2_f_r'] = df.O2_f_r[i]
+#        build['CO2_f_r'] = df.CO2_f_r[i]
+#        build['comb_f_r'] = df.comb_f_r[i]
+#        build['O2_f_p'] = df.O2_f_p[i]
+#        build['CO2_f_p'] = df.CO2_f_p[i]
+#        build['comb_f_p'] = df.comb_f_p[i]
+        build['notes'] = df.Notes[i]
 #        print(build)
 
 # Categories based on previous declarations
