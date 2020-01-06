@@ -328,7 +328,7 @@ for typ in ['block']:
     elif trough:
         key = 't_'
     elif block:
-        key = 'b5_'
+        key = 'b_'
     elif man:
         key = 'm'
     else:
@@ -351,11 +351,8 @@ for typ in ['block']:
         
         if not notes == 'O2+CO2':
             f_path = f_path.split('_')
-            print(f_path)
             f_path.insert(-2, '('+notes+')')
-            print(f_path)
             f_path = '_'.join(f_path)
-            print(f_path)
         
         if not os.path.exists(f_path[:-4]):
             os.mkdir(f_path[:-4])
@@ -417,7 +414,6 @@ for typ in ['block']:
         
         CO2_only = False
         # Starting 2020, WH cohort was fed CO2 gas challenge only
-        print(date)
         if (id[:2] == 'WH' and int(date) > 20200000) or id[:3] == 'CVR':
             CO2_only = True
     
@@ -588,33 +584,33 @@ for typ in ['block']:
 #        processed_CO2_f, extend_time = analysis.stat_utils().resamp_f(pre_CO2.Time + CO2_f_shift, time_pts, pre_CO2.Data, CO2_f_shift, CO2_start+comb_start, tr)
 
         # save the relevant information into the ET_dict
-        ET_dict['O2_shift'].append(O2_shift if pre_O2 is not None else None)
+        ET_dict['O2_shift'].append(O2_shift if not CO2_only else None)
         ET_dict['CO2_shift'].append(CO2_shift)
-        ET_dict['d_shift'].append(CO2_shift-O2_shift if pre_O2 is not None else None)
-        ET_dict['comb_shift'].append(comb_shift if pre_O2 is not None else None)
-        ET_dict['O2_f_shift'].append(O2_f_shift if pre_O2 is not None else None)
-        ET_dict['CO2_f_shift'].append(CO2_f_shift if pre_O2 is not None else None)
+        ET_dict['d_shift'].append(CO2_shift-O2_shift if not CO2_only else None)
+        ET_dict['comb_shift'].append(comb_shift if not CO2_only else None)
+        ET_dict['O2_f_shift'].append(O2_f_shift if not CO2_only else None)
+        ET_dict['CO2_f_shift'].append(CO2_f_shift if not CO2_only else None)
         
-        ET_dict['O2_r'].append(O2_r if pre_O2 is not None else None)
+        ET_dict['O2_r'].append(O2_r if not CO2_only else None)
         ET_dict['CO2_r'].append(CO2_r)
-        ET_dict['comb_r'].append(comb_r if pre_O2 is not None else None)
+        ET_dict['comb_r'].append(comb_r if not CO2_only else None)
         
-        ET_dict['O2_p'].append(O2_p if pre_O2 is not None else None)
+        ET_dict['O2_p'].append(O2_p if not CO2_only else None)
         ET_dict['CO2_p'].append(CO2_p)
-        ET_dict['comb_p'].append(comb_p if pre_O2 is not None else None)
+        ET_dict['comb_p'].append(comb_p if not CO2_only else None)
         
-        ET_dict['O2_f_r'].append(O2_f_r if pre_O2 is not None else None)
-        ET_dict['CO2_f_r'].append(CO2_f_r if pre_O2 is not None else None)
-        ET_dict['comb_f_r'].append(comb_f_r if pre_O2 is not None else None)
+        ET_dict['O2_f_r'].append(O2_f_r if not CO2_only else None)
+        ET_dict['CO2_f_r'].append(CO2_f_r if not CO2_only else None)
+        ET_dict['comb_f_r'].append(comb_f_r if not CO2_only else None)
         
-        ET_dict['O2_f_p'].append(O2_f_p if pre_O2 is not None else None)
-        ET_dict['CO2_f_p'].append(CO2_f_p if pre_O2 is not None else None)
-        ET_dict['comb_f_p'].append(comb_f_p if pre_O2 is not None else None)
+        ET_dict['O2_f_p'].append(O2_f_p if not CO2_only else None)
+        ET_dict['CO2_f_p'].append(CO2_f_p if not CO2_only else None)
+        ET_dict['comb_f_p'].append(comb_f_p if not CO2_only else None)
         
         
         if save:
             #storing cleaned data paths
-            ET_dict['ETO2'].append(save_O2 if pre_O2 is not None else None)
+            ET_dict['ETO2'].append(save_O2 if not CO2_only else None)
             ET_dict['ETCO2'].append(save_CO2)
             ET_dict['ET_exists'].append(True)
             
@@ -677,7 +673,7 @@ for typ in ['block']:
     
     # load design template
     for i in range(len(df)):
-        if df['O2_r'][i] is not None:
+        if df['ETO2'][i]:
             with open(feat_dir+'design_files/template', 'r') as template:
                 stringTemp = template.read()
                 output_dir = feat_dir+key+df.ID[i]+'_'+df.Date[i]
@@ -701,16 +697,17 @@ for typ in ['block']:
                 to_write = to_write.replace("%%O2_CONTRAST%%",'"'+df.ETO2[i]+'"')
                 to_write = to_write.replace("%%CO2_CONTRAST%%",'"'+df.ETCO2[i]+'"')
         
-                ds_path = feat_dir+'design_files/'+key+df.ID[i]+'_'+df.Date[i]+'.fsf'
-                with open(ds_path, 'w+') as outFile:
-                    outFile.write(to_write)
-                            
-                index = parallel_processing.get_next_avail(processes, verb, key, 'FEAT', limit)
-                
-                if verb:
-                    print('Starting FEAT')
-                processes[index] = subprocess.Popen(['feat', ds_path])
-                time.sleep(0.5)
+            ds_path = feat_dir+'design_files/'+key+df.ID[i]+'_'+df.Date[i]+'.fsf'
+            print(ds_path)
+            with open(ds_path, 'w+') as outFile:
+                outFile.write(to_write)
+                        
+            index = parallel_processing.get_next_avail(processes, verb, key, 'FEAT', limit)
+            
+            if verb:
+                print('Starting FEAT')
+            processes[index] = subprocess.Popen(['feat', ds_path])
+            time.sleep(0.5)
         else:
             with open(feat_dir+'design_files/template2', 'r') as template:
                 stringTemp = template.read()
@@ -900,18 +897,18 @@ for typ in ['block']:
         build['comb_shift'] = df.comb_shift[i]
         build['O2_f_shift'] = df.O2_f_shift[i]
         build['CO2_f_shift'] = df.CO2_f_shift[i]
-#        build['O2_r'] = df.O2_r[i]
-#        build['CO2_r'] = df.CO2_r[i]
-#        build['comb_r'] = df.comb_r[i]
-#        build['O2_p'] = df.O2_p[i]
-#        build['CO2_p'] = df.CO2_p[i]
-#        build['comb_p'] = df.comb_p[i]
-#        build['O2_f_r'] = df.O2_f_r[i]
-#        build['CO2_f_r'] = df.CO2_f_r[i]
-#        build['comb_f_r'] = df.comb_f_r[i]
-#        build['O2_f_p'] = df.O2_f_p[i]
-#        build['CO2_f_p'] = df.CO2_f_p[i]
-#        build['comb_f_p'] = df.comb_f_p[i]
+        build['O2_r'] = df.O2_r[i]
+        build['CO2_r'] = df.CO2_r[i]
+        build['comb_r'] = df.comb_r[i]
+        build['O2_p'] = df.O2_p[i]
+        build['CO2_p'] = df.CO2_p[i]
+        build['comb_p'] = df.comb_p[i]
+        build['O2_f_r'] = df.O2_f_r[i]
+        build['CO2_f_r'] = df.CO2_f_r[i]
+        build['comb_f_r'] = df.comb_f_r[i]
+        build['O2_f_p'] = df.O2_f_p[i]
+        build['CO2_f_p'] = df.CO2_f_p[i]
+        build['comb_f_p'] = df.comb_f_p[i]
         build['notes'] = df.Notes[i]
 #        print(build)
 
@@ -964,7 +961,7 @@ plt.rc('xtick', labelsize='large')
 plt.rc('ytick', labelsize='x-small')
 plt.rc('axes', titlesize='medium')
         
-with pd.ExcelWriter(path+'stats_data_comb.xlsx') as writer:  # doctest: +SKIP
+with pd.ExcelWriter(path+'stats_data_invert_comb.xlsx') as writer:  # doctest: +SKIP
     stats_df.to_excel(writer, sheet_name='Stats', index=False)
     warnings_df.to_excel(writer, sheet_name='Warnings', index=False)
 
