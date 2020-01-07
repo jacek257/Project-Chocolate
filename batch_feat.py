@@ -165,19 +165,20 @@ for i in range(len(p_df)):
     # check for the other naming convention
     if not fs_files:
         fs_files = [file for file in os.listdir(freesurfer_t1_dir) if fnmatch.fnmatch(file, p_df.ID[i]+'*_T1.nii*')]
-    
-    # use atlas from FSL
-    if not fs_files:
-        fs_files = ['/usr/local/fsl/data/standard/MNI152_T1_2mm_brain']
-        warnings['ID'].append(p_df.ID[i] + '_' + p_df.Date[i])
-        warnings['warning'].append('No FS_T1 file, using MNI152_T1_2mm_brain atlas')
-        if verb:
-            print('\t\tNo corresponding FS_T1 file, using MNI152_T1_2mm_brain atlas')
         
 
     #select and add file to appropriate list
     b_temp = patient_dir +'/BOLD/'+b_files[0] if len(b_files) > 0 else ''
     t_temp = freesurfer_t1_dir+fs_files[0] if len(fs_files) > 0 else ''
+    
+    # use atlas from FSL
+    if not fs_files:
+        fs_files = ['/usr/local/fsl/data/standard/MNI152_T1_2mm_brain']
+        t_temp = fs_files[0]
+        warnings['ID'].append(p_df.ID[i] + '_' + p_df.Date[i])
+        warnings['warning'].append('No FS_T1 file, using MNI152_T1_2mm_brain atlas')
+        if verb:
+            print('\t\tNo corresponding FS_T1 file, using MNI152_T1_2mm_brain atlas')
 
     nii_paths['BOLD_path'].append(b_temp)
     nii_paths['T1_path'].append(t_temp)
@@ -250,7 +251,6 @@ if verb:
 #drop all false conditional rows and conditional column and reset indeces
 p_df = p_df[p_df.boldFS_exists != False].drop('boldFS_exists', axis = 1)
 p_df = p_df.reset_index(drop=True)
-
 
 #get json files and grab TR value
 if verb:
@@ -964,6 +964,8 @@ plt.rc('axes', titlesize='medium')
 with pd.ExcelWriter(path+'stats_data_invert_comb.xlsx') as writer:  # doctest: +SKIP
     stats_df.to_excel(writer, sheet_name='Stats', index=False)
     warnings_df.to_excel(writer, sheet_name='Warnings', index=False)
+
+stats_df.fillna(0)
 
 sns.scatterplot(x='O2_f_shift', y='CO2_f_shift', data=stats_df)
 sns.regplot(x='O2_f_shift', y='CO2_f_shift', data=stats_df)
