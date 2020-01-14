@@ -980,7 +980,8 @@ sns.distplot(stats_df.d_shift)
 plt.savefig(path+'d_shift_dist.png')
 plt.show(block=False)
 #plt.close()
-input('Press enter to end')
+if disp:
+    input('Press enter to end')
 
 if verb:
     print('============== Script Finished ==============')
