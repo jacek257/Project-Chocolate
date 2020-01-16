@@ -1483,7 +1483,7 @@ class peak_analysis:
         return window_length
 
 
-    def block_signal(self, sig_time, sig, tr, invert):
+    def envelope(self, sig_time, sig, tr, invert):
         """
         Params:
             sigtime (iterable) = the sampling time points of sig
