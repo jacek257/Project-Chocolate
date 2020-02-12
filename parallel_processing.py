@@ -11,7 +11,7 @@ import signal
 import sys
 import time
 
-def kill_unending(processes, verb):
+def kill_unending(processes, verb, time_limit, msg=None):
     '''
     Kills processes if flirt has been running for too long so the FEAT can continue
     
@@ -32,14 +32,14 @@ def kill_unending(processes, verb):
         if len(parts) > 0:
             time = parts[2].split(':')
             secs = int(time[0])*3600 + int(time[1])*60 + int(time[2])
-            if secs > 900:
+            if secs > time_limit:
                 if verb:
                     print('Killing process, flirt taking too long')
                 os.kill(int(parts[0]), signal.SIGTERM)
     
     return
 
-def get_next_avail(processes, verb, key, s_name, limit=5):
+def get_next_avail(processes, verb, s_name, limit=5):
     '''
     Managues the queue for processes
     
@@ -66,7 +66,7 @@ def get_next_avail(processes, verb, key, s_name, limit=5):
     while not any(v is None for v in processes):
         if verb:
             if not msg:
-                print('There are', limit, key, s_name, 'currently running. Limit reached. Waiting for at least one to end.')
+                print('There are', limit, s_name, 'currently running. Limit reached. Waiting for at least one to end.')
                 msg = True
             else:
                 sys.stdout.write(spin[cursor])
@@ -75,7 +75,7 @@ def get_next_avail(processes, verb, key, s_name, limit=5):
                 if cursor >= len(spin):
                     cursor = 0
         
-        kill_unending(processes, verb)
+        kill_unending(processes, verb, 900, 'Killing process, flirt taking too long')
         
         for i, process in enumerate(processes):
             if process != None and process.poll() != None:
@@ -89,7 +89,7 @@ def get_next_avail(processes, verb, key, s_name, limit=5):
     
     return processes.index(None)
 
-def wait_remaining(processes, verb, key, s_name):
+def wait_remaining(processes, verb, s_name):
     '''
     Wait for the queue to empty
     
@@ -114,7 +114,7 @@ def wait_remaining(processes, verb, key, s_name):
     while not all(v is None for v in processes):
         if verb:
             if not msg:
-                print('Waiting for the remaining', key, s_name, 'to finish')
+                print('Waiting for the remaining', s_name, 'to finish')
                 msg = True
             else:
                 sys.stdout.write(spin[cursor])
@@ -122,8 +122,6 @@ def wait_remaining(processes, verb, key, s_name):
                 cursor += 1
                 if cursor >= len(spin):
                     cursor = 0
-        
-        kill_unending(processes, verb)
         
         for i, process in enumerate(processes):
             if process != None and process.poll() != None:

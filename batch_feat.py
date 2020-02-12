@@ -742,7 +742,7 @@ for typ in ['block']:
                 processes[index] = subprocess.Popen(['feat', ds_path])
                 time.sleep(0.5)
             
-    parallel_processing.wait_remaining(processes, verb, key, 'FEAT')
+    parallel_processing.wait_remaining(processes, verb, 'FEAT')
         
     # run featquery
     for i in range(len(df)):
@@ -782,7 +782,7 @@ for typ in ['block']:
             processes[index] = subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope2', 'fq_O2', '-p', '-s', O2_mask_dir_path])
     
 
-    parallel_processing.wait_remaining(processes, verb, key, 'featquery')
+    parallel_processing.wait_remaining(processes, verb, 'featquery')
         
     # get the stats
     for i in range(len(df)):        
