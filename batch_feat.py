@@ -77,7 +77,7 @@ feat_dir = '/media/ke/8tb_part2/FSL_work/feat/'
 
 # set the limit for the number of processes (10 less that the total number of cores in the system) that can be run at once
 cores = multiprocessing.cpu_count()
-limit = cores - 5 if cores > 8 else 1
+limit = cores//2 if cores > 8 else 1
 processes = [None] * limit
 
 warnings = {'ID' : [],
@@ -183,7 +183,6 @@ for i in range(len(p_df)):
     nii_paths['BOLD_path'].append(b_temp)
     nii_paths['T1_path'].append(t_temp)
     nii_paths['boldFS_exists'].append(len(b_files) > 0 and len(fs_files)>0)
-
     if(len(b_files) > 0):
         #construct the processed nifti directory
         processed_dir = patient_dir +'/BOLD_processed/'
@@ -345,6 +344,7 @@ for typ in ['block']:
     
     if verb:
         print('\n\nStart processing each patient')
+    print(p_df)
     for f_path, vol, id, date, b_path, p_path, meants_path, tr, notes in zip(p_df.EndTidal_Path, p_df.Volumes, p_df.ID, p_df.Date,
                                                                       p_df.BOLD_corrected_path, p_df.Processed_path, p_df.meants_path,
                                                                       p_df.eff_TR, p_df.Notes):
@@ -647,7 +647,7 @@ for typ in ['block']:
     
     #construct new DataFrame
     et_frame = pd.DataFrame(ET_dict)
-    print(et_frame)
+#    print(et_frame)
     
     #merge and drop bad entries
     df = p_df.merge(et_frame, on=['ID', 'Date'], how='inner')
@@ -702,7 +702,7 @@ for typ in ['block']:
             with open(ds_path, 'w+') as outFile:
                 outFile.write(to_write)
                         
-            index = parallel_processing.get_next_avail(processes, verb, key, 'FEAT', limit)
+            index = parallel_processing.get_next_avail(processes, verb, key+'FEAT', limit)
             
             if verb:
                 print('Starting FEAT')
@@ -735,7 +735,7 @@ for typ in ['block']:
                 with open(ds_path, 'w+') as outFile:
                     outFile.write(to_write)
                             
-                index = parallel_processing.get_next_avail(processes, verb, key, 'FEAT', limit)
+                index = parallel_processing.get_next_avail(processes, verb, key+'FEAT', limit)
                 
                 if verb:
                     print('Starting FEAT')
@@ -753,7 +753,7 @@ for typ in ['block']:
         CO2_mask_dir_path = feat_output_dir+'cluster_mask_zstat1.nii.gz'
         O2_mask_dir_path = feat_output_dir+'cluster_mask_zstat2.nii.gz'
                     
-        index = parallel_processing.get_next_avail(processes, verb, key, 'featquery', limit)
+        index = parallel_processing.get_next_avail(processes, verb, key+'featquery', limit)
         
         if os.path.exists(feat_output_dir+'fq_CO2'):
             if verb:
@@ -767,7 +767,7 @@ for typ in ['block']:
                 print('Starting CO2 featquery for', p_id)
             processes[index] = subprocess.Popen(['featquery', '1', feat_output_dir, '1', 'stats/cope1', 'fq_CO2', '-p', '-s', CO2_mask_dir_path])
         
-        index = parallel_processing.get_next_avail(processes, verb, key, 'featquery', limit)
+        index = parallel_processing.get_next_avail(processes, verb, key+'featquery', limit)
         
         if os.path.exists(feat_output_dir+'fq_O2'):
             if verb:
@@ -961,7 +961,7 @@ plt.rc('xtick', labelsize='large')
 plt.rc('ytick', labelsize='x-small')
 plt.rc('axes', titlesize='medium')
         
-with pd.ExcelWriter(path+'stats_data_invert_comb.xlsx') as writer:  # doctest: +SKIP
+with pd.ExcelWriter(path+'stats_invert_comb.xlsx') as writer:  # doctest: +SKIP
     stats_df.to_excel(writer, sheet_name='Stats', index=False)
     warnings_df.to_excel(writer, sheet_name='Warnings', index=False)
 

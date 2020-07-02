@@ -29,12 +29,14 @@ parser = argparse.ArgumentParser()
 
 # add optional arguments
 parser.add_argument("-v", "--verbose", action='store_true', help="incrase output verbosity")
+parser.add_argument("-g", "--graph", action='store_true', help="display all intermediary graphs")
 parser.add_argument("-o", "--overwrite", action='store_true', help='overwrite existing processed gas data')
 
 #get the positional arguments
 args = parser.parse_args()
 
 verb = True if args.verbose else False
+graph = True if args.graph else False
 over = True if args.overwrite else False
 
 ######################################
@@ -120,22 +122,49 @@ for i in range(len(df)):
     nii_image = nii_image[:, :, :, 3:]
     
     # condense the 4D data into 3D data
-    nii_max = alter.condense(nii_image, 'max')
+    nii_max = alter.condense(nii_image, 'max')    
+    # create brain mask based off the max intensities
+    max_mask = alter.create_mask(nii_max, 0.05, 0.95, opening=False, verb=verb)
+    # extract brain
+    max_brain = nii_max * max_mask
+    
+    if graph:
+        # display graphs
+        alter.display_brain_by_slice(max_brain, max_brain, df['pt'][i], 'max')
+    
+    # create a mask based off the median intensities
+    nii_med = alter.condense(nii_image, 'median')
+    med_mask = alter.create_mask(nii_med, 0.05, 0.95, opening=False, verb=verb)
+    # extract brain
+    med_brain = nii_med * med_mask
+    if graph:
+        # display graphs
+        alter.display_brain_by_slice(med_brain, med_mask, df['pt'][i], 'med')
+    
+    # create a mask based off the min intensities
+    nii_min = alter.condense(nii_image, 'min')
+    min_mask = alter.create_mask(nii_min, 0.05, 0.95, opening=False, verb=verb)
+    # extract_brain
+    min_brain = nii_min * min_mask
+    # display graphs
+    if graph:
+        alter.display_brain_by_slice(min_brain, min_mask, df['pt'][i], 'min')
         
-    # create brain mask
-    mask = alter.create_mask(nii_max, 0.05, 0.95, opening=False, verb=verb)
+    final_mask = max_mask.astype(int)+med_mask.astype(int)+min_mask.astype(int)
+    final_mask[final_mask <= 1] = 0
+    final_mask[final_mask > 1] = 1
     
-    # get the brain
-    brain = nii_max * mask
+    range_nii = alter.condense(nii_image, 'range')
+    final_brain = range_nii*final_mask
+    if graph:
+        alter.display_brain_by_slice(final_brain, final_mask, df['pt'][i], 'range')
     
+    sinus_mask = alter.create_mask(final_brain, m=0.90, M=0.98, opening=False, exclude_zeros=False)
+    sinus = final_brain*sinus_mask    
     
-#    max_max = nii_max.max()
-#    brain_max = brain.max()
-#    fig, axes = plt.subplots(brain.shape[2], 3, figsize=(15,45))
-#    for i in range(brain.shape[2]):
-#        axes[i][0].imshow(nii_max[:,:,i].T, vmin=0, vmax=max_max, cmap='jet')
-#        axes[i][1].imshow(mask[:,:,i].T, cmap='jet')
-#        axes[i][2].imshow(brain[:,:,i].T, vmin=0, vmax=brain_max, cmap='jet')
-#    plt.show()
-#    plt.close()
-
+    sinus_sig = []
+    for i in range(nii.shape[-1]):
+        sinus_sig[i] = final_brain[:,:,:,i].mean()
+    if graph:
+        plt.plot(sinus_sig)
+        plt.show()

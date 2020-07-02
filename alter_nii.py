@@ -10,7 +10,7 @@ from nipy import labs
 import cv2 as cv
 import matplotlib.pyplot as plt
 
-def condense(brain_4D, fxn='max'):
+def condense(brain_4D, fxn='max', per=75):
     '''
     Condenses a 4D time series brain scan into a 3D volumetirc using an agregate function
     
@@ -29,27 +29,33 @@ def condense(brain_4D, fxn='max'):
                     Takes the average value for each voxel in the time axis
                 range
                     Takes the range for each voxel in the time axis
+                percentile
+                    Takes the nth percentile for each voxel in the time axis
+        per: int
+            Only used when fxn=percentile. Specifies which percentile to take
     Returns:
         brain_3D: numpy array
             The condensed 3D data
     '''
     
     if fxn == 'max':
-        brain_3D = np.max(brain_4D, axis=-1)
+        brain_3D = np.percentile(brain_4D, 100, axis=-1)
     elif fxn == 'min':
-        brain_3D = np.min(brain_4D, axis=-1)
-    elif fxn == 'med':
-        brain_3D = np.median(brain_4D, axis=-1)
-    elif fxn == 'avg':
+        brain_3D = np.percentile(brain_4D, 0, axis=-1)
+    elif fxn == 'med' or fxn =='median':
+        brain_3D = np.percentile(brain_4D, 50, axis=-1)
+    elif fxn == 'avg' or fxn == 'mean':
         brain_3D = np.mean(brain_4D, axis=-1)
     elif fxn == 'range':
         brain_3D = np.max(brain_4D, axis=-1) - np.min(brain_4D, axis=-1)
+    elif fxn == 'percentile':
+        brain_3D = np.percentile(brain_4D, per, axis=-1)
     else:
         raise NameError(fxn, 'is not one of the options for fxn. Please read doc string')
     
     return brain_3D
 
-def create_mask(brain, lower, upper, opening, verb):
+def create_mask(brain, lower, upper, opening, verb, ex_zeros=True):
     '''
     Create a mask to extract only the brain from the scan i.e. skull strip, remove eyeballs etc.
     
@@ -68,7 +74,7 @@ def create_mask(brain, lower, upper, opening, verb):
         mask: numpy array
             The mask of the extracted brain
     '''
-    mask_init = labs.mask.compute_mask(brain, m=lower, M=upper, opening=opening, exclude_zeros=True)
+    mask_init = labs.mask.compute_mask(brain, m=lower, M=upper, opening=opening, exclude_zeros=ex_zeros)
     mask = __grow_mask(mask_init, verb)
     return mask
     
@@ -77,11 +83,11 @@ def __grow_mask(mask, verb):
     for z in range(mask.shape[-1]):
         mask_part = np.zeros_like(mask[:,:,z])
         labels, stats = cv.connectedComponentsWithStats(np.uint8(mask[:,:,z]), 4)[1:3]
-        print('++++++++++++++++++++++++')
-        print(labels)
-        print('------------------------')
-        print(stats)
-        print('++++++++++++++++++++++++')
+#        print('++++++++++++++++++++++++')
+#        print(labels)
+#        print('------------------------')
+#        print(stats)
+#        print('++++++++++++++++++++++++')
         try:
             largest_label = 1 + np.argmax(stats[1:, cv.CC_STAT_AREA])
             mask_part[labels == largest_label] = 1
@@ -106,3 +112,16 @@ def __grow_mask(mask, verb):
                     new_mask[i+1][j+1][k] = 1
                     
     return new_mask
+
+def display_brain_by_slice(brain, mask, patient, type):
+    brain_max = brain.max()
+    brain_min = brain.min()
+    fig, axes = plt.subplots(5, 5, figsize=(20,20))
+    fig.suptitle(patient + ' ' + type)
+    for i in range(brain.shape[-1]):
+        axes[i//5][i%5].imshow(brain[:,:,i].T, vmin=brain_min, vmax=brain_max, cmap='jet')
+        axes[i//5][i%5].get_xaxis().set_visible(False)
+        axes[i//5][i%5].get_yaxis().set_visible(False)
+    plt.show()
+    plt.close()
+    
